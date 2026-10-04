@@ -3,10 +3,13 @@ import { readFile, rename } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { Song, SongCategory } from '@shared/types'
 import {
+  arrivalNumbers,
   cleanCategories,
   defaultCategories,
+  familyKey,
   mergeCatalog,
   sameSong,
+  settledNumbers,
   type OldCatalog
 } from '@shared/categories'
 import {
@@ -51,6 +54,25 @@ const KEEP_DELETED = 100
 
 export const songsBin = binOf(store)
 
+function giveNumbers(file: SongsFile, numbers: Map<string, string>): boolean {
+  if (numbers.size === 0) return false
+
+  const now = Date.now()
+  file.items = file.items.map((song) => {
+    const number = numbers.get(song.id)
+    if (number === undefined || number === song.number) return song
+    return { ...song, number, updatedAt: now }
+  })
+  return true
+}
+
+export async function settleSongNumbers(): Promise<void> {
+  const file = await store.read()
+  if (giveNumbers(file, settledNumbers(file.items, cleanCategories(file.categories)))) {
+    await store.write(file)
+  }
+}
+
 export async function mergeOldCatalog(): Promise<void> {
   const file = await store.read()
   if (file.catalogMerged) return
@@ -94,9 +116,15 @@ export async function saveCategories(
   file.categories = clean
 
   const known = new Set(clean.map((one) => one.id))
-  file.items = file.items.map((song) =>
-    !song.categoryId || known.has(song.categoryId) ? song : { ...song, categoryId: null }
-  )
+  const freed: Song[] = []
+  file.items = file.items.map((song) => {
+    if (!song.categoryId || known.has(song.categoryId)) return song
+    const loose = { ...song, categoryId: null }
+    freed.push(loose)
+    return loose
+  })
+  const order = freed.sort(songOrder).map((song) => song.id)
+  giveNumbers(file, arrivalNumbers(file.items, clean, order, false))
 
   await store.write(file)
   return { categories: clean, songs: await listSongs() }
@@ -111,14 +139,19 @@ export async function setSongsCategory(
   const wanted = categoryId && known ? categoryId : null
   const picked = new Set(ids)
 
-  let touched = false
+  const moved: string[] = []
   file.items = file.items.map((song) => {
     if (!picked.has(song.id) || (song.categoryId ?? null) === wanted) return song
-    touched = true
+    moved.push(song.id)
     return { ...song, categoryId: wanted }
   })
 
-  if (touched) await store.write(file)
+  if (moved.length > 0) {
+    const order = new Map(ids.map((id, at) => [id, at]))
+    moved.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0))
+    giveNumbers(file, arrivalNumbers(file.items, cleanCategories(file.categories), moved, false))
+    await store.write(file)
+  }
   return listSongs()
 }
 
@@ -144,12 +177,14 @@ export async function renumberSongs(ids: string[]): Promise<Song[]> {
 }
 
 export async function placeSongAt(id: string, number: number): Promise<Song[]> {
-  const { items } = await store.read()
+  const { items, categories } = await store.read()
   const song = items.find((s) => s.id === id)
   if (!song || !Number.isFinite(number) || number < 1) return listSongs()
 
+  const known = cleanCategories(categories)
+  const key = familyKey(song, known)
   const family = [...items]
-    .filter((s) => (s.folderId ?? null) === (song.folderId ?? null))
+    .filter((s) => familyKey(s, known) === key)
     .sort(songOrder)
     .map((s) => s.id)
 
@@ -158,13 +193,16 @@ export async function placeSongAt(id: string, number: number): Promise<Song[]> {
 
 export async function saveSong(song: Song): Promise<Song[]> {
   const file = await store.read()
-  const known = cleanCategories(file.categories).some((one) => one.id === song.categoryId)
+  const categories = cleanCategories(file.categories)
+  const known = categories.some((one) => one.id === song.categoryId)
   const next = { ...song, categoryId: known ? song.categoryId : null, updatedAt: Date.now() }
   const at = file.items.findIndex((s) => s.id === song.id)
+  const arrived = at < 0 || familyKey(file.items[at], categories) !== familyKey(next, categories)
 
   if (at >= 0) file.items[at] = next
   else file.items.unshift(next)
 
+  if (arrived) giveNumbers(file, arrivalNumbers(file.items, categories, [next.id], at < 0))
   await store.write(file)
   return listSongs()
 }
@@ -341,7 +379,7 @@ async function ingest(
       const title = named.title || name
       const number = named.number
 
-      if (sameSong(file.items, title, number)) {
+      if (sameSong(file.items, title, number, undefined, parsed.song.parts)) {
         duplicates.push(title)
         continue
       }
@@ -368,7 +406,10 @@ async function ingest(
     }
   }
 
-  if (ids.length) await store.write(file)
+  if (ids.length) {
+    giveNumbers(file, arrivalNumbers(file.items, cleanCategories(file.categories), ids))
+    await store.write(file)
+  }
   return {
     songs: await listSongs(),
     added: ids.length,

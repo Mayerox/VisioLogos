@@ -163,9 +163,9 @@ export function SongsTab(): React.JSX.Element {
       await leaveCategory(id)
       if ((was.folderId ?? null) !== folderId) await s.moveTo(id, folderId)
 
-      const family = useSongs
-        .getState()
-        .items.filter((song) => (song.folderId ?? null) === folderId)
+      const { items, categories } = useSongs.getState()
+      const family = songsIn(items, categories, openCategory?.id ?? null)
+        .filter((song) => (song.folderId ?? null) === folderId)
         .map((song) => song.id)
 
       await s.reorder(movedBefore(family, id, beforeId))
@@ -315,15 +315,7 @@ export function SongsTab(): React.JSX.Element {
               placeholder={t('songs.search')}
               onChange={(e) => s.setQuery(e.target.value)}
             />
-            {openCategory ? (
-              <CategoryHead category={openCategory} />
-            ) : (
-              !searching && (
-                <CategoryList
-                  onDropFiles={(files, categoryId) => void takeFiles(files, null, categoryId)}
-                />
-              )
-            )}
+            {openCategory && <CategoryHead category={openCategory} />}
             {searching ? (
               <div className="list">
                 {visible.length === 0 && <div className="hint">{t('common.nothingFound')}</div>}
@@ -348,8 +340,12 @@ export function SongsTab(): React.JSX.Element {
                 ))}
               </div>
             ) : (
-              <>
-
+              <div className="songlib">
+                {!openCategory && (
+                  <CategoryList
+                    onDropFiles={(files, categoryId) => void takeFiles(files, null, categoryId)}
+                  />
+                )}
                 {s.items.length === 0 ? (
                   <div className="hint">{t('songs.emptyLibrary')}</div>
                 ) : openCategory ? (
@@ -371,7 +367,7 @@ export function SongsTab(): React.JSX.Element {
                   onDropFiles={(files, folderId) => void takeFiles(files, folderId)}
                   onFoldersRemoved={(removed) => void liftSongs(removed)}
                 />
-              </>
+              </div>
             )}
           </div>
         </section>

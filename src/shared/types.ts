@@ -388,3 +388,5 @@ export interface SongCategory {
   id: string
   name: string
 }
+
+export type EditCommand = 'cut' | 'copy' | 'paste'

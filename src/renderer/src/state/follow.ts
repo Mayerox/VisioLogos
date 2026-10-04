@@ -1,6 +1,6 @@
 import {
+  feed,
   followFrom,
-  hear,
   normalizeWord,
   phrasesOf,
   plainLine,
@@ -9,7 +9,8 @@ import {
   type Follow,
   type Tape,
   type TapeSlide,
-  type TapeWord
+  type TapeWord,
+  type Utterance
 } from '@shared/singAlong'
 import { useLive } from './live'
 import { useSongs, type SongSlide } from './songs'
@@ -28,10 +29,17 @@ const textKey = (slides: SongSlide[]): string =>
 
 const timesOf = (slides: SongSlide[]): string => slides.map((one) => one.times).join(',')
 
+const early = (): boolean => useVoice.getState().moment === 'early'
+
+const following = (): boolean => {
+  const voice = useVoice.getState()
+  return voice.on && voice.mode === 'follow'
+}
+
 export function startVoiceFollow(): () => void {
   let built: Built | null = null
   let state: Follow | null = null
-  let consumed = 0
+  let utter: Utterance | null = null
   let expecting = -1
   let generation = 0
 
@@ -78,7 +86,7 @@ export function startVoiceFollow(): () => void {
     const phrases = lines.flat().map((line) => line.flatMap(parts))
 
     return {
-      tape: tapeOf(tapeSlides),
+      tape: tapeOf(tapeSlides, early()),
       slides: tapeSlides,
       grammar: phrases.some((one) => one.length > 0) ? phrasesOf(phrases) : null,
       text: textKey(slides),
@@ -86,25 +94,28 @@ export function startVoiceFollow(): () => void {
     }
   }
 
+  function restart(index: number): void {
+    if (!built) return
+    state = followFrom(built.tape, index, now())
+    utter = null
+    publish()
+  }
+
   async function refresh(): Promise<string | null> {
     const next = await build()
     if (!next) return built?.grammar ?? null
 
     built = next
-    state = followFrom(next.tape, useSongs.getState().index, now())
-    consumed = 0
     expecting = -1
-    publish()
+    restart(useSongs.getState().index)
 
     await useVoice.getState().setGrammar(next.grammar)
     return next.grammar
   }
 
-  function retime(slides: SongSlide[]): void {
-    if (!built || built.slides.length !== slides.length) return
-
-    const tapeSlides = built.slides.map((one, i) => ({ ...one, times: slides[i].times }))
-    built = { ...built, slides: tapeSlides, tape: tapeOf(tapeSlides) }
+  function retime(slides: TapeSlide[]): void {
+    if (!built) return
+    built = { ...built, slides, tape: tapeOf(slides, early()) }
     publish()
   }
 
@@ -124,7 +135,7 @@ export function startVoiceFollow(): () => void {
   useVoice.setState({ prepare: refresh })
 
   const offSongs = useSongs.subscribe((after, before) => {
-    if (!useVoice.getState().on) return
+    if (!following()) return
 
     if (after.draft?.id !== before.draft?.id || after.slides !== before.slides) {
       const text = textKey(after.slides)
@@ -132,8 +143,9 @@ export function startVoiceFollow(): () => void {
         void refresh()
         return
       }
-      if (timesOf(after.slides) !== built.slides.map((one) => one.times).join(',')) {
-        retime(after.slides)
+      const sameCount = built.slides.length === after.slides.length
+      if (sameCount && timesOf(after.slides) !== built.slides.map((one) => one.times).join(',')) {
+        retime(built.slides.map((one, i) => ({ ...one, times: after.slides[i].times })))
       }
     }
 
@@ -142,37 +154,36 @@ export function startVoiceFollow(): () => void {
         expecting = -1
         return
       }
-      if (built) {
-        state = followFrom(built.tape, after.index, now())
-        publish()
-      }
+      restart(after.index)
     }
   })
 
   const offHeard = window.api.voice.onHeard(({ text, final }) => {
-    if (!useVoice.getState().on || !built || !state) {
-      consumed = 0
+    if (!following() || !built || !state) {
+      utter = null
       return
     }
 
-    const words = text.split(/\s+/).filter(Boolean)
-    if (words.length < consumed) consumed = words.length
-    const fresh = words.slice(consumed)
-    consumed = final ? 0 : words.length
-    if (fresh.length === 0) return
-
-    const result = hear(built.tape, state, fresh, now())
+    const result = feed(built.tape, state, utter, text, now())
     state = result.state
+    utter = final ? null : result.utter
     publish()
 
-    if (result.step.kind === 'turn' || result.step.kind === 'jump') void go(result.step.to)
+    for (const step of [...result.steps].reverse()) {
+      if (step.kind === 'turn' || step.kind === 'jump') {
+        void go(step.to)
+        break
+      }
+    }
   })
 
   const offVoice = useVoice.subscribe((after, before) => {
-    if (after.on === before.on) return
-    consumed = 0
+    if (after.moment !== before.moment && built) retime(built.slides)
+
+    if (after.on === before.on && after.mode === before.mode) return
+    utter = null
     expecting = -1
-    if (!after.on) {
+    if (!after.on || after.mode !== 'follow') {
       state = null
       publish()
     }

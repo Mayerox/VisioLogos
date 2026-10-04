@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { MenuBar, MenuDialogs, showCurrent, snapshot } from './components/MenuBar'
 import { ScreensMenu } from './components/ScreensMenu'
+import { EditMenu } from './components/EditMenu'
 import { HomeTab } from './tabs/HomeTab'
 import { BibleTab } from './tabs/BibleTab'
 import { TextsTab } from './tabs/TextsTab'
@@ -80,6 +81,12 @@ export function App(): React.JSX.Element {
     window.addEventListener('dragover', swallow)
     window.addEventListener('drop', swallow)
 
+    const offTab = useUi.subscribe((now, before) => {
+      if (before.tab === 'texts' && now.tab !== 'texts') void useTexts.getState().flush()
+    })
+    const keepText = (): void => void useTexts.getState().flush()
+    window.addEventListener('beforeunload', keepText)
+
     const offScreen = useScreen.subscribe((now, before) => {
       if (now.aspect === before.aspect) return
       void useBible.getState().rebuild()
@@ -104,8 +111,10 @@ export function App(): React.JSX.Element {
       offLook()
       offScreen()
       offLang()
+      offTab()
       window.removeEventListener('dragover', swallow)
       window.removeEventListener('drop', swallow)
+      window.removeEventListener('beforeunload', keepText)
     }
   }, [])
 
@@ -144,6 +153,7 @@ export function App(): React.JSX.Element {
 
       <MenuDialogs />
       <UndoNotice />
+      <EditMenu />
     </div>
   )
 }

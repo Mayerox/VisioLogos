@@ -67,22 +67,6 @@ interface VoiceStep {
   total?: number
 }
 
-interface VoiceStatus {
-  state: string
-  error?: string
-
-  using?: string
-
-  level?: number
-  devices?: { id: string; label: string }[]
-}
-
-interface VoiceCommand {
-  do: 'start' | 'stop' | 'devices' | 'grammar'
-  deviceId?: string | null
-  grammar?: string | null
-}
-
 interface DeckImport {
   decks: Deck[]
   added: Deck[]
@@ -90,10 +74,12 @@ interface DeckImport {
 }
 import type { SongFormat } from '@shared/songFormats'
 import type { TextFormat } from '@shared/textFormats'
+import type { VoiceCommand, VoiceHeard, VoiceStatus } from '@shared/voiceSound'
 import type { Chrome } from '@shared/themes'
 import type {
   BackgroundItem,
   DisplayInfo,
+  EditCommand,
   LiveState,
   LowerThird,
   OutputRole,
@@ -294,6 +280,8 @@ const api = {
     chrome: (chrome: Chrome): Promise<void> => ipcRenderer.invoke('app:chrome', chrome),
 
     snapshot: (): Promise<string | null> => ipcRenderer.invoke('app:snapshot'),
+
+    edit: (command: EditCommand): Promise<void> => ipcRenderer.invoke('app:edit', command),
     quit: (): Promise<void> => ipcRenderer.invoke('app:quit')
   },
 
@@ -328,13 +316,11 @@ const api = {
     spell: (tokens: string[]): Promise<Record<string, string[]> | null> =>
       ipcRenderer.invoke('voice:spell', tokens),
 
-    heard: (text: string, final: boolean): Promise<void> =>
-      ipcRenderer.invoke('voice:heard', text, final),
+    heard: (heard: VoiceHeard): Promise<void> => ipcRenderer.invoke('voice:heard', heard),
     status: (status: VoiceStatus): Promise<void> =>
       ipcRenderer.invoke('voice:status', status),
 
-    onHeard: (cb: (heard: { text: string; final: boolean }) => void): (() => void) =>
-      on('voice:heard', cb),
+    onHeard: (cb: (heard: VoiceHeard) => void): (() => void) => on('voice:heard', cb),
     onStatus: (cb: (status: VoiceStatus) => void): (() => void) => on('voice:status', cb),
     onCommand: (cb: (command: VoiceCommand) => void): (() => void) =>
       on('voice:command', cb)

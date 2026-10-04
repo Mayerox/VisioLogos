@@ -5,7 +5,7 @@ import { isLang, setLang } from '@shared/i18n'
 import { appIcon, savedChrome, TITLE_BAR_HEIGHT } from './system'
 import { flushSettings, readSettings } from './settings'
 import { flushTexts } from './texts'
-import { flushSongs, mergeOldCatalog } from './songs'
+import { flushSongs, mergeOldCatalog, settleSongNumbers } from './songs'
 import { releaseGlobalRemote, remoteLiveChanged, setGlobalRemote, watchGlobalRemote } from './remote'
 import { flushFolders } from './folders'
 import { flushTree } from './tree'
@@ -100,6 +100,9 @@ if (!app.requestSingleInstanceLock()) {
 
     await mergeOldCatalog().catch((error) =>
       console.error('[Песни] Не удалось перенести каталог в библиотеку:', error)
+    )
+    await settleSongNumbers().catch((error) =>
+      console.error('[Песни] Не удалось поправить номера песен:', error)
     )
 
     registerIpc()

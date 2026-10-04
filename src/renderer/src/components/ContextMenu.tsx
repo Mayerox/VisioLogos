@@ -32,6 +32,7 @@ interface MenuState {
 
 export function useContextMenu(): {
   open: (e: React.MouseEvent, entries: MenuEntry[]) => void
+  openAt: (x: number, y: number, entries: MenuEntry[]) => void
   menu: React.ReactNode
 } {
   const [state, setState] = useState<MenuState | null>(null)
@@ -49,6 +50,10 @@ export function useContextMenu(): {
       y: noPointer ? box.bottom + 4 : e.clientY,
       entries
     })
+  }, [])
+
+  const openAt = useCallback((x: number, y: number, entries: MenuEntry[]) => {
+    if (entries.length > 0) setState({ x, y, entries })
   }, [])
 
   const close = useCallback(() => setState(null), [])
@@ -78,6 +83,7 @@ export function useContextMenu(): {
 
   return {
     open,
+    openAt,
     menu: state ? <Menu state={state} onClose={close} /> : null
   }
 }

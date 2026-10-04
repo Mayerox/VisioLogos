@@ -31,6 +31,10 @@ export const en: Dict = {
   'common.up': 'Move up',
   'common.down': 'Move down',
   'common.copyText': 'Copy text',
+  'edit.cut': 'Cut',
+  'edit.copy': 'Copy',
+  'edit.paste': 'Paste',
+  'edit.selectAll': 'Select all',
   'common.prevSlide': 'Previous slide',
   'common.nextSlide': 'Next slide',
 
@@ -682,7 +686,7 @@ export const en: Dict = {
   'voice.heard': 'I hear: {text}',
   'voice.using': 'Listening to: {name}',
   'voice.device': 'Input',
-  'voice.deviceDefault': 'System default',
+  'voice.deviceDefault': 'Auto: the USB input when plugged in',
   'voice.overAir':
     'A Bluetooth headset microphone will not do: when it turns on, the sound goes through a narrow channel and the words are almost impossible to make out. Use the input carrying the sound from the desk, or a plain microphone in a socket.',
   'voice.needModel':
@@ -811,6 +815,45 @@ export const en: Dict = {
   'voice.fewer': 'Fewer repeats',
   'voice.more': 'More repeats',
   'voice.pass': 'Now singing time {n} of {of}',
+  'voice.check': 'Check sound',
+  'voice.checkStop': 'Stop checking',
+  'voice.checking': 'Checking',
+  'voice.checkHint':
+    'Listen to the input and show what is heard without touching the slides. Works without an open song too',
+  'voice.found': 'Found a USB input: {name}',
+  'voice.channel': 'Channel',
+  'voice.channelHint':
+    'UCA222 has two inputs, L and R. “Auto” takes the channel that carries sound; if one channel carries the voice and the other the band, pick the voice one',
+  'voice.chAuto': 'Auto',
+  'voice.chBoth': 'Both',
+  'voice.chLeft': 'L',
+  'voice.chRight': 'R',
+  'voice.left': 'L',
+  'voice.right': 'R',
+  'voice.meterHint':
+    'Input level in dB. Keep the voice between −30 and −10; the mark is the silence threshold',
+  'voice.tune': 'Sound settings',
+  'voice.sensitivity': 'Sensitivity',
+  'voice.sensitivityHint':
+    'Sound below the threshold counts as silence and is ignored. Higher sensitivity hears quieter sound',
+  'voice.gate': 'threshold {db} dB',
+  'voice.autoGain': 'Even out the volume',
+  'voice.autoGainHint': 'The app gently lifts a quiet voice and lowers a loud one',
+  'voice.gain': 'Gain',
+  'voice.db': '{db} dB',
+  'voice.moment': 'Turn the slide',
+  'voice.momentLast': 'on the last word',
+  'voice.momentEarly': 'one word earlier',
+  'voice.momentHint':
+    'Normally the next slide comes as soon as the last word starts. “One word earlier” turns on the word before it — handy when the choir sings fast',
+  'voice.clip': 'The input is overloaded — turn the desk output down',
+  'voice.lost':
+    'The input sound was interrupted ({s} s): the computer was overloaded. Close other programs',
+  'voice.onlyLeft': 'Sound only on the left channel — listening to it',
+  'voice.onlyRight': 'Sound only on the right channel — listening to it',
+  'voice.lag': 'Recognition delay: {s} s',
+  'voice.slow':
+    'The computer cannot keep up: recognition is {s} s behind. Close other programs',
   'n.times.one': '{n} time',
   'n.times.few': '{n} times',
   'n.times.many': '{n} times',

@@ -1,6 +1,6 @@
-import type { Song, SongCategory } from './types'
+import type { Song, SongCategory, SongPart } from './types'
 import { t } from './i18n'
-import { sameText } from './songs'
+import { sameText, songNumber } from './songs'
 
 export const REVIVAL = 'cat-revival'
 export const ELDER = 'cat-elder'
@@ -16,23 +16,119 @@ export function defaultCategories(): SongCategory[] {
 
 export const titleKey = (title: string): string => sameText(title)
 
+const lyricsKey = (parts: SongPart[]): string => sameText(parts.map((p) => p.text).join('\n'))
+
 export function sameSong(
   songs: Song[],
   title: string,
   number = '',
-  exceptId?: string
+  exceptId?: string,
+  parts?: SongPart[]
 ): Song | null {
   const key = titleKey(title)
   if (!key) return null
 
   const wanted = number.trim()
+  const lyrics = parts && parts.length > 0 ? lyricsKey(parts) : ''
   return (
     songs.find((song) => {
       if (song.id === exceptId || titleKey(song.title) !== key) return false
       const own = song.number.trim()
-      return !wanted || !own || own === wanted
+      if (!wanted || !own || own === wanted) return true
+      return lyrics !== '' && lyricsKey(song.parts) === lyrics
     }) ?? null
   )
+}
+
+export function categoryOf(
+  song: Pick<Song, 'categoryId'>,
+  categories: SongCategory[]
+): string | null {
+  const id = song.categoryId ?? null
+  return id && categories.some((one) => one.id === id) ? id : null
+}
+
+export const familyKey = (
+  song: Pick<Song, 'categoryId' | 'folderId'>,
+  categories: SongCategory[]
+): string => `${categoryOf(song, categories) ?? ''}/${song.folderId ?? ''}`
+
+const hasNumber = (song: Song): boolean => songNumber(song) !== Number.MAX_SAFE_INTEGER
+
+function runsOf(songs: Song[]): Song[][] {
+  const runs: Song[][] = []
+  let last = Infinity
+  for (const song of songs) {
+    if (!hasNumber(song)) continue
+    const n = songNumber(song)
+    if (n <= last) runs.push([])
+    runs[runs.length - 1].push(song)
+    last = n
+  }
+  return runs
+}
+
+export function freeNumbers(
+  settled: Song[],
+  arriving: Song[],
+  keep = true
+): Map<string, string> {
+  const taken = new Set(settled.filter(hasNumber).map((song) => song.number.trim()))
+  const shifted: Song[][] = []
+
+  for (const run of runsOf(arriving)) {
+    if (!keep || run.some((song) => taken.has(song.number.trim()))) shifted.push(run)
+    else for (const song of run) taken.add(song.number.trim())
+  }
+
+  let next = 0
+  for (const key of taken) next = Math.max(next, Number.parseInt(key, 10) || 0)
+
+  const out = new Map<string, string>()
+  for (const run of shifted) for (const song of run) out.set(song.id, String(++next))
+  return out
+}
+
+export function settledNumbers(items: Song[], categories: SongCategory[]): Map<string, string> {
+  const families = new Map<string, Song[]>()
+  for (const song of [...items].reverse()) {
+    const key = familyKey(song, categories)
+    const family = families.get(key)
+    if (family) family.push(song)
+    else families.set(key, [song])
+  }
+
+  const out = new Map<string, string>()
+  for (const family of families.values()) {
+    for (const [id, number] of freeNumbers([], family)) out.set(id, number)
+  }
+  return out
+}
+
+export function arrivalNumbers(
+  items: Song[],
+  categories: SongCategory[],
+  ids: string[],
+  keep = true
+): Map<string, string> {
+  const arriving = new Set(ids)
+  const byId = new Map(items.map((song) => [song.id, song]))
+  const groups = new Map<string, Song[]>()
+  for (const id of ids) {
+    const song = byId.get(id)
+    if (!song) continue
+    const key = familyKey(song, categories)
+    groups.set(key, [...(groups.get(key) ?? []), song])
+  }
+
+  const out = new Map<string, string>()
+  for (const [key, list] of groups) {
+    const settled = items.filter(
+      (song) => !arriving.has(song.id) && familyKey(song, categories) === key
+    )
+    for (const [id, number] of freeNumbers(settled, list, keep)) out.set(id, number)
+  }
+  return out
 }
 
 export function songsIn(

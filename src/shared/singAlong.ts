@@ -14,6 +14,8 @@ const SLACK = 2
 
 const NEXT_START = 6
 
+const TAIL = 1500
+
 export function normalizeWord(raw: string): string {
   return raw
     .toLowerCase()
@@ -161,7 +163,7 @@ export interface Tape {
 
 const matchable = (word: TapeWord): boolean => word.hear && word.norm.length >= MIN_WORD
 
-export function tapeOf(slides: TapeSlide[]): Tape {
+export function tapeOf(slides: TapeSlide[], early = false): Tape {
   const words: Tape['words'] = []
   const marks: TapeMark[] = []
 
@@ -175,14 +177,11 @@ export function tapeOf(slides: TapeSlide[]): Tape {
     }
 
     const to = words.length
-    let cue = -1
-    let count = 0
-    for (let i = from; i < to; i++) {
-      if (!matchable(words[i])) continue
-      cue = i
-      count++
-    }
+    const heard: number[] = []
+    for (let i = from; i < to; i++) if (matchable(words[i])) heard.push(i)
 
+    const pick = early && heard.length >= 3 ? heard.length - 2 : heard.length - 1
+    const cue = pick >= 0 ? heard[pick] : -1
     const gate = cue < 0 ? to : Math.max(from, ...starts.filter((start) => start <= cue))
 
     marks.push({
@@ -190,7 +189,7 @@ export function tapeOf(slides: TapeSlide[]): Tape {
       to,
       cue,
       gate,
-      need: Math.min(3, count),
+      need: Math.min(3, pick + 1),
       times: Math.max(1, Math.floor(slide.times) || 1)
     })
   })
@@ -272,6 +271,10 @@ export interface Follow {
   hold: number
 
   holds: number
+
+  tail: number
+
+  tailTo: number
 }
 
 export type Step =
@@ -291,7 +294,9 @@ export function followFrom(tape: Tape, slide: number, now: number): Follow {
     stray: [],
     quiet: 0,
     hold: -1,
-    holds: 0
+    holds: 0,
+    tail: 0,
+    tailTo: 0
   }
 }
 
@@ -311,6 +316,14 @@ export function hear(
     const slide = tape.slides[state.slide]
     if (!slide) break
 
+    if (state.tail < state.tailTo && now - state.since <= TAIL) {
+      const left = nearest(tape, word, state.tail, state.tailTo)
+      if (left >= 0) {
+        state = { ...state, tail: left + 1 }
+        continue
+      }
+    }
+
     const found = nearest(tape, word, state.at, Math.min(slide.to, state.at + LOOK_HERE))
 
     if (found >= 0) {
@@ -328,10 +341,23 @@ export function hear(
 
       const pass = state.pass + 1
       if (pass < slide.times) {
-        state = { ...state, at: slide.from, pass, hits: 0, since: now }
+        state = {
+          ...state,
+          at: slide.from,
+          pass,
+          hits: 0,
+          since: now,
+          tail: found + 1,
+          tailTo: slide.to
+        }
         step = { kind: 'again', pass }
       } else if (state.slide + 1 < tape.slides.length) {
-        state = { ...followFrom(tape, state.slide + 1, now), quiet: now + QUIET }
+        state = {
+          ...followFrom(tape, state.slide + 1, now),
+          quiet: now + QUIET,
+          tail: found + 1,
+          tailTo: slide.to
+        }
         step = { kind: 'turn', to: state.slide }
       } else {
         state = { ...state, pass, since: now }
@@ -350,6 +376,52 @@ export function hear(
   }
 
   return { state, step }
+}
+
+export interface Utterance {
+  words: string[]
+
+  marks: Follow[]
+
+  floor: number
+}
+
+export function feed(
+  tape: Tape,
+  state: Follow,
+  utter: Utterance | null,
+  text: string,
+  now: number
+): { state: Follow; utter: Utterance; steps: Step[] } {
+  const words = text.split(/\s+/).filter(Boolean)
+  const was = utter ?? { words: [], marks: [state], floor: 0 }
+
+  let same = 0
+  while (same < words.length && same < was.words.length && words[same] === was.words[same]) {
+    same++
+  }
+  const from = Math.min(Math.max(same, was.floor), was.words.length)
+
+  const next: Utterance = {
+    words: was.words.slice(0, from),
+    marks: was.marks.slice(0, from + 1),
+    floor: was.floor
+  }
+  let current = from < was.words.length ? (was.marks[from] ?? state) : state
+
+  const steps: Step[] = []
+  for (let i = from; i < words.length; i++) {
+    const result = hear(tape, current, [words[i]], now)
+    current = result.state
+    next.words.push(words[i])
+    next.marks.push(current)
+    if (result.step.kind !== 'stay') {
+      steps.push(result.step)
+      next.floor = next.words.length
+    }
+  }
+
+  return { state: current, utter: next, steps }
 }
 
 interface Run {
@@ -416,7 +488,7 @@ function relocate(
   if (!best) return null
 
   const mark = tape.slides[best.slide]
-  const fromStart = best.first - mark.from < NEXT_START
+  const fromStart = best.first >= mark.from && best.first - mark.from < NEXT_START
   const need = best.slide === next && fromStart ? 2 : 3
   if (best.hits < need) return null
 
@@ -456,7 +528,9 @@ function relocate(
       stray: [],
       quiet: now + QUIET,
       hold: -1,
-      holds: 0
+      holds: 0,
+      tail: 0,
+      tailTo: 0
     },
     step: best.slide === next ? { kind: 'turn', to: next } : { kind: 'jump', to: best.slide }
   }

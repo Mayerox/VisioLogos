@@ -171,7 +171,10 @@ export function MenuBar(): React.JSX.Element {
           onClick: () => void window.api.app.openData()
         },
         SEPARATOR,
-        { label: t('menu.quit'), onClick: () => void window.api.app.quit() }
+        {
+          label: t('menu.quit'),
+          onClick: () => void useTexts.getState().flush().then(() => window.api.app.quit())
+        }
       ]
     },
     {

@@ -201,8 +201,6 @@ export function TextsTab(): React.JSX.Element {
             <span>{draft ? presetLabel(draft.kind) : t('texts.presets')}</span>
             {draft && (
               <span className="panel__actions">
-                {s.dirty && <span className="badge">{t('common.unsaved')}</span>}
-
                 <button
                   className="link"
                   title={t('texts.exportHint')}

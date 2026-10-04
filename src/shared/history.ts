@@ -10,6 +10,26 @@ export interface Release {
 
 export const HISTORY: Release[] = [
   {
+    version: '1.0.1',
+    date: '2026-10-05',
+    ru: [
+      'Листание по голосу слушает вход без «улучшателей» звонков, само находит USB-интерфейс вроде Behringer UCA222, выбирает левый или правый канал и выравнивает громкость.',
+      'Звук читается прямо со входа и не теряется, если компьютер на миг притормозил; слайд меняется примерно через 0,3–0,4 с после начала последнего слова.',
+      'Кнопка «Проверить звук» показывает уровень по каналам, перегруз, пропуски звука и то, что слышно, не трогая слайды. Слайд можно менять «на слово раньше».',
+      'Номера в категории больше не повторяются: новые песни встают в конец и нумеруются дальше, а старые повторы исправляются сами.',
+      'Тексты сохраняются сами — при наборе, при переходе на другую вкладку или заготовку и при выходе.',
+      'В полях ввода правая кнопка открывает меню «Вырезать, Копировать, Вставить, Выделить всё»; песни без категории прокручиваются вместе с категориями.'
+    ],
+    en: [
+      'Turning slides by voice listens to the input without call “enhancers”, finds a USB interface such as Behringer UCA222 by itself, picks the left or right channel and evens out the volume.',
+      'Sound is read straight from the input and is not lost when the computer stalls for a moment; the slide turns about 0.3–0.4 s after the last word begins.',
+      '“Check sound” shows the level per channel, overload, dropouts and what is heard without touching the slides. Slides can turn “one word earlier”.',
+      'Numbers within a category no longer repeat: new songs go to the end and continue the numbering, and old repeats are fixed automatically.',
+      'Texts save themselves — while typing, when switching to another tab or preset, and on exit.',
+      'Right-click in a text field opens “Cut, Copy, Paste, Select all”; songs without a category scroll together with the categories.'
+    ]
+  },
+  {
     version: '1.0.0',
     date: '2026-09-26',
     ru: [

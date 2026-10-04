@@ -3,6 +3,7 @@ import { copyFile, mkdir, rename, stat, writeFile } from 'node:fs/promises'
 import { join, normalize, sep } from 'node:path'
 import { t } from '@shared/i18n'
 import { askSite, readAll } from './siteFetch'
+import type { VoiceCommand } from '@shared/voiceSound'
 import { forgetVocabulary, spellForVoice } from './voiceWords'
 
 const SOURCE = 'https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip'
@@ -139,12 +140,6 @@ function listener(): BrowserWindow {
   })
 
   return page
-}
-
-export interface VoiceCommand {
-  do: 'start' | 'stop' | 'devices' | 'grammar'
-  deviceId?: string | null
-  grammar?: string | null
 }
 
 export function voiceCommand(command: VoiceCommand): void {

@@ -99,6 +99,8 @@ interface TextsStore {
 
   edit: (patch: Partial<TextItem>, note?: { label: string; merge?: string }) => void
   save: () => Promise<void>
+
+  flush: () => Promise<void>
   remove: (id: string) => Promise<void>
 
   rename: (id: string, title: string) => Promise<void>
@@ -132,13 +134,15 @@ export const useTexts = create<TextsStore>((set, get) => ({
   setQuery: (query) => set({ query }),
 
   create: (kind) => {
+    void get().flush()
     set({ draft: emptyText(kind), dirty: false })
     get().rebuild()
   },
 
   open: (id) => {
     const item = get().items.find((i) => i.id === id)
-    if (!item) return
+    if (!item || get().draft?.id === id) return
+    void get().flush()
     set({ draft: { ...item }, dirty: false, previewIndex: 0 })
     get().rebuild()
   },
@@ -157,19 +161,15 @@ export const useTexts = create<TextsStore>((set, get) => ({
 
     set({ draft: next, dirty: true })
     get().rebuild()
+    keepLater()
   },
 
-  save: async () => {
-    const draft = get().draft
-    if (!draft) return
+  save: () => get().flush(),
 
-    const title =
-      draft.title.trim() ||
-      (draft.kind === 'list' ? listTitle(draft.body) : '') ||
-      firstLine(draft.body) ||
-      t('common.untitled')
-    const items = await window.api.texts.save({ ...draft, title })
-    set({ items, draft: { ...draft, title }, dirty: false })
+  flush: () => {
+    stopKeeping()
+    const { draft, dirty } = get()
+    return draft && dirty ? keep(draft) : saving
   },
 
   rename: async (id, title) => {
@@ -201,7 +201,9 @@ export const useTexts = create<TextsStore>((set, get) => ({
     const put = async (to: string | null): Promise<void> => {
       const one = get().items.find((i) => i.id === id)
       if (!one) return
-      set({ items: await window.api.texts.save({ ...one, folderId: to }) })
+      const items = await window.api.texts.save({ ...one, folderId: to })
+      const draft = get().draft
+      set({ items, draft: draft?.id === id ? { ...draft, folderId: to } : draft })
     }
 
     const was = item.folderId ?? null
@@ -211,6 +213,8 @@ export const useTexts = create<TextsStore>((set, get) => ({
 
   remove: async (id) => {
     const item = get().items.find((i) => i.id === id)
+    if (get().draft?.id === id) stopKeeping()
+    await saving
 
     const drop = async (): Promise<void> => {
       set({ items: await window.api.texts.remove(id) })
@@ -232,7 +236,10 @@ export const useTexts = create<TextsStore>((set, get) => ({
     })
   },
 
-  closeDraft: () => set({ draft: null, dirty: false, preview: [], previewIndex: 0 }),
+  closeDraft: () => {
+    void get().flush()
+    set({ draft: null, dirty: false, preview: [], previewIndex: 0 })
+  },
 
   exportText: (format, id) => window.api.texts.export(format, [id]),
 
@@ -311,8 +318,42 @@ export const useTexts = create<TextsStore>((set, get) => ({
 function showDraft(item: TextItem): void {
   useTexts.setState({ draft: item, dirty: true })
   useTexts.getState().rebuild()
+  keepLater()
   if (useUi.getState().tab !== 'texts') useUi.getState().goEdit('texts')
 }
+
+const KEEP_AFTER_MS = 600
+
+let waiting: ReturnType<typeof setTimeout> | null = null
+let saving: Promise<void> = Promise.resolve()
+
+function stopKeeping(): void {
+  if (waiting) clearTimeout(waiting)
+  waiting = null
+}
+
+function keepLater(): void {
+  stopKeeping()
+  waiting = setTimeout(() => void useTexts.getState().flush(), KEEP_AFTER_MS)
+}
+
+function keep(draft: TextItem): Promise<void> {
+  const item = { ...draft, title: titleOf(draft) }
+  saving = saving
+    .then(async () => {
+      const items = await window.api.texts.save(item)
+      const now = useTexts.getState()
+      useTexts.setState({ items, dirty: now.draft === draft ? false : now.dirty })
+    })
+    .catch((error) => console.error('[Тексты] Не удалось сохранить текст:', error))
+  return saving
+}
+
+const titleOf = (draft: TextItem): string =>
+  draft.title.trim() ||
+  (draft.kind === 'list' ? listTitle(draft.body) : '') ||
+  firstLine(draft.body) ||
+  t('common.untitled')
 
 const firstLine = (body: string): string =>
   body.split('\n').find((l) => l.trim())?.trim().slice(0, 60) ?? ''

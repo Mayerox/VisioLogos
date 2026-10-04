@@ -227,14 +227,14 @@ export const useSongs = create<SongsStore>((set, get) => ({
     const gone = was.find((one) => one.id === id)
     if (!gone) return
 
-    const members = get()
-      .items.filter((song) => song.categoryId === id)
-      .map((song) => song.id)
+    const inside = get().items.filter((song) => song.categoryId === id)
+    const members = inside.map((song) => song.id)
+    const numbers = numbersOf(inside)
     const next = was.filter((one) => one.id !== id)
 
     const drop = async (): Promise<void> => {
       await putCategories(next)
-      followDraft(members, null)
+      followDraft(members)
     }
 
     await drop()
@@ -243,7 +243,7 @@ export const useSongs = create<SongsStore>((set, get) => ({
       undo: async () => {
         await putCategories(was)
         set({ items: await window.api.songs.setCategory(members, id) })
-        followDraft(members, id)
+        await putNumbers(numbers)
       },
       redo: drop
     })
@@ -255,9 +255,10 @@ export const useSongs = create<SongsStore>((set, get) => ({
     )
     if (moving.length === 0) return
 
+    const numbers = numbersOf(moving)
     const put = async (to: string | null, which: string[]): Promise<void> => {
       set({ items: await window.api.songs.setCategory(which, to) })
-      followDraft(which, to)
+      followDraft(which)
     }
 
     const back = new Map<string | null, string[]>()
@@ -272,6 +273,7 @@ export const useSongs = create<SongsStore>((set, get) => ({
       label: t('undo.songCategory'),
       undo: async () => {
         for (const [was, which] of back) await put(was, which)
+        await putNumbers(numbers)
       },
       redo: () => put(categoryId, all)
     })
@@ -375,11 +377,19 @@ export const useSongs = create<SongsStore>((set, get) => ({
       const one = get().items.find((s) => s.id === id)
       if (!one) return
       set({ items: await window.api.songs.save({ ...one, folderId: to }) })
+      followDraft([id])
     }
 
     const was = song.folderId ?? null
     await put(folderId)
-    remember({ label: t('undo.move'), undo: () => put(was), redo: () => put(folderId) })
+    remember({
+      label: t('undo.move'),
+      undo: async () => {
+        await put(was)
+        await putNumbers(numbersOf([song]))
+      },
+      redo: () => put(folderId)
+    })
   },
 
   remove: async (id) => {
@@ -615,11 +625,33 @@ async function putCategories(list: SongCategory[]): Promise<void> {
   }
 }
 
-function followDraft(ids: string[], categoryId: string | null): void {
-  const draft = useSongs.getState().draft
-  if (draft && ids.includes(draft.id)) {
-    useSongs.setState({ draft: { ...draft, categoryId } })
+function followDraft(ids: string[]): void {
+  const { draft, items } = useSongs.getState()
+  if (!draft || !ids.includes(draft.id)) return
+
+  const stored = items.find((song) => song.id === draft.id)
+  if (!stored) return
+  useSongs.setState({
+    draft: {
+      ...draft,
+      categoryId: stored.categoryId ?? null,
+      folderId: stored.folderId ?? null,
+      number: stored.number
+    }
+  })
+}
+
+const numbersOf = (songs: Song[]): Map<string, string> =>
+  new Map(songs.map((song) => [song.id, song.number]))
+
+async function putNumbers(numbers: Map<string, string>): Promise<void> {
+  for (const [id, number] of numbers) {
+    const one = useSongs.getState().items.find((song) => song.id === id)
+    if (one && one.number !== number) {
+      useSongs.setState({ items: await window.api.songs.save({ ...one, number }) })
+    }
   }
+  followDraft([...numbers.keys()])
 }
 
 export function backgroundNotice(bg: { added: number; existed: number }): string | null {

@@ -59,16 +59,20 @@ import {
   withKind
 } from '../src/shared/songs'
 import {
+  arrivalNumbers,
   cleanCategories,
   countIn,
   defaultCategories,
+  ELDER,
   freeCategoryName,
+  freeNumbers,
   KIDS,
   mergeCatalog,
   movedCategory,
   placedCategory,
   REVIVAL,
   sameSong,
+  settledNumbers,
   songsIn,
   titleKey
 } from '../src/shared/categories'
@@ -80,6 +84,7 @@ import { isOurSite, langName, modulePath, siteHosts, SITE, SITE_NAME } from '../
 import { importSongFile } from '../src/main/songImport'
 import {
   DWELL,
+  feed,
   followFrom,
   hear,
   normalizeWord,
@@ -94,8 +99,21 @@ import {
   vocabularyFromText,
   type Follow,
   type Step,
-  type Tape
+  type Tape,
+  type Utterance
 } from '../src/shared/singAlong'
+import {
+  DEFAULT_TUNING,
+  Resampler,
+  SILENT_DB,
+  VoiceShaper,
+  ampOf,
+  cleanMoment,
+  cleanTuning,
+  pickChannel,
+  toDb,
+  type VoiceTuning
+} from '../src/shared/voiceSound'
 import { pptxBackground } from '../src/main/pptxMedia'
 import { zipSync } from 'fflate'
 import {
@@ -332,8 +350,11 @@ async function main(): Promise<void> {
   checkSongRepeats()
   checkSongNumbers()
   checkCategories()
+  checkCategoryNumbers()
   checkImportNames()
   checkSingAlong()
+  checkVoiceSound()
+  checkHeardRevisions()
   checkDeckBackground()
   checkBibleFile()
   await checkSongImport()
@@ -1003,6 +1024,129 @@ function checkImportNames(): void {
   )
 }
 
+function checkCategoryNumbers(): void {
+  console.log('\n=== Номера внутри категории ===')
+
+  setLang('ru')
+  const list = defaultCategories()
+  const song = (
+    id: string,
+    number: string,
+    categoryId: string | null = ELDER,
+    folderId: string | null = null
+  ): Song => ({ ...emptySong(), id, title: id, number, categoryId, folderId })
+
+  const numbersOf = (songs: Song[], changed: Map<string, string>): string =>
+    songs.map((one) => `${one.id}=${changed.get(one.id) ?? one.number}`).join(' ')
+
+  const first = [song('a1', '1'), song('a2', '2'), song('a3', '3'), song('a4', '4'), song('thanks', '')]
+  const second = [song('b1', '1'), song('b2', '2'), song('b3', '3')]
+
+  let got = freeNumbers(first, second)
+  check(
+    'вторая служба в той же категории продолжает номера',
+    numbersOf(second, got) === 'b1=5 b2=6 b3=7',
+    numbersOf(second, got)
+  )
+  check('песни первой службы не тронуты', first.every((one) => !got.has(one.id)))
+
+  const later = [song('c3', '5'), song('c4', '6')]
+  got = freeNumbers(first, later)
+  check('свободные номера остаются как в файле', got.size === 0, numbersOf(later, got))
+
+  const hymns = [song('h1', '245', REVIVAL), song('h2', '1000', REVIVAL)]
+  got = freeNumbers(hymns, [song('h3', '77', REVIVAL)])
+  check('номер из сборника, если свободен, не меняется', got.size === 0)
+
+  const both = [...first.slice(0, 4), ...second]
+  got = freeNumbers([], both)
+  check(
+    'две папки разом в пустую категорию — подряд, без повторов',
+    numbersOf(both, got) === 'a1=1 a2=2 a3=3 a4=4 b1=5 b2=6 b3=7',
+    numbersOf(both, got)
+  )
+
+  got = freeNumbers([song('x1', '1'), song('x5', '5')], second)
+  check(
+    'при дырке в номерах новые песни не перемешиваются',
+    numbersOf(second, got) === 'b1=6 b2=7 b3=8',
+    numbersOf(second, got)
+  )
+
+  const unnumbered = [song('u1', ''), song('u2', '')]
+  check('песни без номера номер не получают', freeNumbers(first, unnumbered).size === 0)
+
+  const store = [
+    song('b3', '3'),
+    song('b2', '2'),
+    song('b1', '1'),
+    song('thanks', ''),
+    song('a4', '4'),
+    song('a3', '3'),
+    song('a2', '2'),
+    song('a1', '1'),
+    song('k1', '1', KIDS),
+    song('k2', '2', KIDS),
+    song('f1', '1', ELDER, 'folder-1'),
+    song('loose1', '1', null),
+    song('lost1', '1', 'cat-удалена')
+  ]
+  got = settledNumbers(store, list)
+  check(
+    'повторы при запуске исправлены: вторая служба после первой',
+    numbersOf(store.slice(0, 8).reverse(), got) === 'a1=1 a2=2 a3=3 a4=4 thanks= b1=5 b2=6 b3=7',
+    numbersOf(store.slice(0, 8).reverse(), got)
+  )
+  check('в другой категории свои номера', !got.has('k1') && !got.has('k2'))
+  check('в папке внутри категории свои номера', !got.has('f1'))
+  check(
+    'песня из удалённой категории считается песней без категории',
+    got.has('lost1') !== got.has('loose1'),
+    numbersOf(store.slice(11), got)
+  )
+
+  const fixed = store.map((one) => ({ ...one, number: got.get(one.id) ?? one.number }))
+  check('второй раз исправлять нечего', settledNumbers(fixed, list).size === 0)
+
+  const dragged = [song('d1', '2'), song('d2', '3'), song('d3', '1')].reverse()
+  check('порядок, заданный перетаскиванием, не трогается', settledNumbers(dragged, list).size === 0)
+
+  const library = [...second, ...first]
+  got = arrivalNumbers(library, list, ['b1', 'b2', 'b3'])
+  check(
+    'импорт в категорию: новые встают в конец',
+    numbersOf(second, got) === 'b1=5 b2=6 b3=7',
+    numbersOf(second, got)
+  )
+
+  const alone = [song('n1', '4', KIDS), ...first]
+  got = arrivalNumbers(alone, list, ['n1'])
+  check('ввезённая песня со свободным номером его сохраняет', got.size === 0)
+
+  const moving = [song('m1', '3', KIDS), ...first]
+  got = arrivalNumbers(moving, list, ['m1'], false)
+  check('перенесённая в пустую категорию песня — №1', got.get('m1') === '1', got.get('m1'))
+
+  const visitor = [song('v1', '2'), song('v2', '9'), ...first]
+  got = arrivalNumbers(visitor, list, ['v2', 'v1'], false)
+  check(
+    'перенесённые песни встают в конец по порядку переноса',
+    got.get('v2') === '5' && got.get('v1') === '6',
+    numbersOf(visitor.slice(0, 2), got)
+  )
+
+  const lyrics = [{ id: 'p', kind: 'verse' as const, number: 1, text: 'Вечный Бог, Творец небес' }]
+  const kept = [{ ...song('e1', '6'), title: 'Вечный Бог', parts: lyrics }]
+  check(
+    'та же песня с новым номером при повторном импорте — повтор',
+    sameSong(kept, 'Вечный Бог', '2', undefined, lyrics)?.id === 'e1'
+  )
+  check(
+    'с другим текстом и другим номером — другая песня',
+    sameSong(kept, 'Вечный Бог', '2', undefined, [{ ...lyrics[0], text: 'Совсем другие слова' }]) === null
+  )
+}
+
 function checkCategories(): void {
   console.log('\n=== Категории песен ===')
 
@@ -1323,6 +1467,283 @@ function checkSingAlong(): void {
 
 function hearable(word: string): { norm: string; hear: boolean } {
   return { norm: normalizeWord(word), hear: true }
+}
+
+function checkVoiceSound(): void {
+  console.log('\n=== Звук для листания ===')
+
+  const RATE = 16_000
+  const tone = (hz: number, db: number, seconds: number, sign = 1): Float32Array =>
+    Float32Array.from(
+      { length: Math.round(seconds * RATE) },
+      (_, i) => sign * ampOf(db) * Math.SQRT2 * Math.sin((2 * Math.PI * hz * i) / RATE)
+    )
+  const shape = (
+    shaper: VoiceShaper,
+    left: Float32Array,
+    right: Float32Array | null = null
+  ): Float32Array => {
+    const out = new Float32Array(left.length)
+    for (let at = 0; at < left.length; at += 128) {
+      const end = Math.min(left.length, at + 128)
+      const part = new Float32Array(end - at)
+      shaper.process(left.subarray(at, end), right ? right.subarray(at, end) : null, part)
+      out.set(part, at)
+    }
+    return out
+  }
+  const levelOf = (signal: Float32Array, fromSecond: number): number => {
+    let sum = 0
+    const from = Math.round(fromSecond * RATE)
+    for (let i = from; i < signal.length; i++) sum += signal[i] * signal[i]
+    return toDb(sum / Math.max(1, signal.length - from))
+  }
+  const flat = (tuning: Partial<VoiceTuning> = {}): VoiceShaper =>
+    new VoiceShaper(RATE, { ...DEFAULT_TUNING, autoGain: false, gateDb: -80, ...tuning })
+  const near = (a: number, b: number, slack: number): boolean => Math.abs(a - b) <= slack
+
+  const hum = levelOf(shape(flat(), tone(50, -20, 2)), 1)
+  check('фон 50 Гц срезан больше чем на 10 дБ', hum < -30, `${hum.toFixed(1)} дБ`)
+  const voice = levelOf(shape(flat(), tone(1000, -20, 2)), 1)
+  check('голос 1 кГц проходит без потерь', near(voice, -20, 0.5), `${voice.toFixed(1)} дБ`)
+
+  const hiss = levelOf(shape(flat({ gateDb: -60 }), tone(800, -70, 2)), 1)
+  check('шум тише порога приглушён', hiss <= -99, `${hiss.toFixed(1)} дБ`)
+  const sung = levelOf(shape(flat({ gateDb: -60 }), tone(800, -40, 2)), 1)
+  check('голос громче порога проходит', near(sung, -40, 0.5), `${sung.toFixed(1)} дБ`)
+
+  const only = flat()
+  const leftOnly = shape(only, tone(600, -30, 3), new Float32Array(3 * RATE))
+  const meterOnly = only.meter()
+  check('звук только в левом канале — берётся левый', meterOnly.use === 'left', meterOnly.use)
+  check(
+    'и не теряет половину громкости',
+    near(levelOf(leftOnly, 2), -30, 0.5),
+    `${levelOf(leftOnly, 2).toFixed(1)} дБ`
+  )
+  check('правый канал на индикаторе пустой', meterOnly.right < -90, String(meterOnly.right))
+
+  const twin = flat()
+  shape(twin, tone(600, -30, 3), tone(600, -30, 3))
+  check('одинаковый звук в обоих каналах — слушаются оба', twin.meter().use === 'both')
+
+  const flipped = flat()
+  shape(flipped, tone(600, -30, 3), tone(600, -30, 3, -1))
+  check('каналы в противофазе не гасят друг друга', flipped.meter().use !== 'both')
+
+  const fixed = flat({ channel: 'right' })
+  const rightPicked = shape(fixed, tone(600, -30, 2), tone(600, -40, 2))
+  check(
+    'выбранный вручную канал не меняется',
+    fixed.meter().use === 'right' && near(levelOf(rightPicked, 1), -40, 0.5)
+  )
+
+  const mono = flat()
+  shape(mono, tone(600, -30, 1))
+  const monoMeter = mono.meter()
+  check('моно-вход: один канал', monoMeter.channels === 1 && monoMeter.right <= SILENT_DB)
+
+  const quiet = new VoiceShaper(RATE, DEFAULT_TUNING)
+  const lifted = shape(quiet, tone(400, -45, 10))
+  check(
+    'тихий голос плавно подтянут к рабочему уровню',
+    levelOf(lifted, 8) > -25,
+    `${levelOf(lifted, 8).toFixed(1)} дБ, усиление ${quiet.meter().gainDb}`
+  )
+  const loud = new VoiceShaper(RATE, DEFAULT_TUNING)
+  shape(loud, tone(400, -5, 4))
+  check('громкий голос убавлен', loud.meter().gainDb <= -5, String(loud.meter().gainDb))
+
+  const hot = flat()
+  shape(hot, Float32Array.from({ length: RATE }, (_, i) => (i % 40 < 20 ? 1 : -1)))
+  check('перегруз виден на индикаторе', hot.meter().clip)
+
+  const step = new VoiceShaper(RATE, DEFAULT_TUNING)
+  shape(step, tone(400, -30, 0.5))
+  const before = step.meter().gainDb
+  shape(step, tone(400, -30, 0.05))
+  check('усиление не скачет за миг', Math.abs(step.meter().gainDb - before) < 0.5)
+
+  const odd = cleanTuning({ channel: 'center', autoGain: 'yes', gainDb: 99, gateDb: -500 })
+  check(
+    'мусор в настройках заменяется разумным',
+    odd.channel === 'auto' && odd.autoGain === true && odd.gainDb === 30 && odd.gateDb === -80,
+    JSON.stringify(odd)
+  )
+  check('момент смены по умолчанию — последнее слово', cleanMoment('later') === 'last')
+  check('порог «на слово раньше» читается', cleanMoment('early') === 'early')
+  const toneAt = (rate: number, hz: number, db: number, seconds: number): Float32Array =>
+    Float32Array.from(
+      { length: Math.round(seconds * rate) },
+      (_, i) => ampOf(db) * Math.SQRT2 * Math.sin((2 * Math.PI * hz * i) / rate)
+    )
+  const down = (from: number, signal: Float32Array, block: number): Float32Array => {
+    const resampler = new Resampler(from, RATE)
+    const parts: Float32Array[] = []
+    for (let at = 0; at < signal.length; at += block) {
+      parts.push(resampler.push(signal.subarray(at, Math.min(signal.length, at + block))))
+    }
+    const out = new Float32Array(parts.reduce((sum, part) => sum + part.length, 0))
+    let at = 0
+    for (const part of parts) {
+      out.set(part, at)
+      at += part.length
+    }
+    return out
+  }
+
+  const from48 = down(48_000, toneAt(48_000, 1000, -20, 2), 480)
+  check('48 кГц → 16 кГц: голос не теряет громкости', near(levelOf(from48, 0.5), -20, 0.5), `${levelOf(from48, 0.5).toFixed(2)} дБ`)
+  check('48 кГц → 16 кГц: втрое меньше отсчётов', Math.abs(from48.length - 32_000) <= 2, String(from48.length))
+  const from44 = down(44_100, toneAt(44_100, 1000, -20, 2), 441)
+  check('44,1 кГц → 16 кГц: голос не теряет громкости', near(levelOf(from44, 0.5), -20, 0.5), `${levelOf(from44, 0.5).toFixed(2)} дБ`)
+  check('44,1 кГц → 16 кГц: верное число отсчётов', Math.abs(from44.length - 32_000) <= 2, String(from44.length))
+  const whistle = down(48_000, toneAt(48_000, 12_000, -20, 2), 480)
+  check('писк 12 кГц не заворачивается в слышимую полосу', levelOf(whistle, 0.5) < -50, `${levelOf(whistle, 0.5).toFixed(1)} дБ`)
+  const whole = down(44_100, toneAt(44_100, 700, -20, 1), 44_100)
+  const pieces = down(44_100, toneAt(44_100, 700, -20, 1), 441)
+  let seam = 0
+  for (let i = 0; i < Math.min(whole.length, pieces.length); i++) seam = Math.max(seam, Math.abs(whole[i] - pieces[i]))
+  check('кусками по 10 мс — без швов', seam < 1e-5 && Math.abs(whole.length - pieces.length) <= 1, String(seam))
+  const same = down(RATE, toneAt(RATE, 1000, -20, 1), 160)
+  check('16 кГц проходит как есть', near(levelOf(same, 0.3), -20, 0.5) && Math.abs(same.length - RATE) <= 1)
+
+  check('пустой канал справа — берётся левый', pickChannel(1e-3, 0, 2.5e-4) === 'left')
+  check('общий звук — оба канала', pickChannel(1e-3, 1e-3, 1e-3) === 'both')
+}
+
+function checkHeardRevisions(): void {
+  console.log('\n=== Исправления распознавателя ===')
+
+  const song = [
+    ['Господь моя сила и щит', 'На Него уповает сердце моё'],
+    ['Буду петь Ему новую песнь', 'И славить имя Его вовеки'],
+    ['Свят свят свят Господь Бог', 'Вся земля полна славы Его']
+  ]
+  const tape = tapeFrom(song)
+
+  const run = (
+    on: Tape,
+    texts: (string | { final: string })[],
+    gap = 300
+  ): { state: Follow; turns: { to: number; text: string }[] } => {
+    let state = followFrom(on, 0, 0)
+    let utter: Utterance | null = null
+    const turns: { to: number; text: string }[] = []
+    texts.forEach((one, i) => {
+      const final = typeof one !== 'string'
+      const text = typeof one === 'string' ? one : one.final
+      const result = feed(on, state, utter, text, i * gap)
+      state = result.state
+      utter = final ? null : result.utter
+      for (const stepOf of result.steps) {
+        if (stepOf.kind === 'turn' || stepOf.kind === 'jump') turns.push({ to: stepOf.to, text })
+      }
+    })
+    return { state, turns }
+  }
+
+  const growing = [
+    'господь',
+    'господь моя',
+    'господь моя сила',
+    'господь моя сила и щит',
+    'господь моя сила и щит на него',
+    'господь моя сила и щит на него уповает',
+    'господь моя сила и щит на него уповает сердце',
+    'господь моя сила и щит на него уповает сердце моё'
+  ]
+  let result = run(tape, growing)
+  check(
+    'по растущей подсказке переход на последнем слове',
+    result.turns.length === 1 && result.turns[0].text.endsWith('моё'),
+    JSON.stringify(result.turns)
+  )
+
+  result = run(tape, ['господь моя силой', 'господь моя сила и щит'])
+  check(
+    'исправленное слово засчитано заново',
+    result.state.at === 5 && result.state.hits === 4,
+    `${result.state.at}/${result.state.hits}`
+  )
+
+  result = run(tape, ['господь моя сила и щит на него', 'господь моя сила и щит'])
+  check('подсказка стала короче — место откатилось', result.state.at === 5, String(result.state.at))
+
+  result = run(tape, [...growing, 'господь моя сила и щит на него уповает сердце мое буду'])
+  check(
+    'исправление после перехода не даёт второго перехода',
+    result.turns.length === 1 && result.state.slide === 1,
+    JSON.stringify(result.turns)
+  )
+
+  result = run(tape, [
+    { final: 'господь моя сила и щит' },
+    'на него уповает',
+    'на него уповает сердце моё'
+  ], 700)
+  check(
+    'после конца фразы следующая продолжает с того же места',
+    result.turns.length === 1 && result.state.slide === 1,
+    JSON.stringify(result.turns)
+  )
+
+  result = run(tape, ['моё', 'моё сердце моё'], 900)
+  check('одно последнее слово без строки — перехода нет', result.turns.length === 0)
+
+  const earlyTape = tapeOf(
+    song.map((lines) => ({ times: 1, lines: lines.map((line) => tokensOf(line).map(hearable)) })),
+    true
+  )
+  result = run(earlyTape, growing)
+  check(
+    '«на слово раньше»: переход на предпоследнем слове',
+    result.turns.length === 1 && result.turns[0].text.endsWith('сердце'),
+    JSON.stringify(result.turns)
+  )
+
+  const twice = tapeOf(
+    song.map((lines, i) => ({
+      times: i === 1 ? 2 : 1,
+      lines: lines.map((line) => tokensOf(line).map(hearable))
+    })),
+    true
+  )
+  const second = 'буду петь ему новую песнь и славить имя его вовек'
+  const sungTwice = sing(
+    twice,
+    followFrom(twice, 1, 0),
+    [...tokensOf(second), 'господь', ...tokensOf(second)],
+    0,
+    450
+  )
+  check(
+    'допетое после смены слово и оговорка не листают раньше времени',
+    sungTwice.agains.length === 1 &&
+      sungTwice.turns.length === 1 &&
+      sungTwice.jumps.length === 0 &&
+      sungTwice.turns[0].word === 'его',
+    JSON.stringify(sungTwice)
+  )
+  check(
+    'и переход случился на втором проходе',
+    sungTwice.state.slide === 2,
+    String(sungTwice.state.slide)
+  )
+
+  const lastTape = tapeFrom(song)
+  const tailed = sing(
+    lastTape,
+    followFrom(lastTape, 0, 0),
+    [...tokensOf('господь моя сила и щит на него уповает сердце моё'), 'моё', 'буду', 'петь'],
+    0,
+    400
+  )
+  check(
+    'протянутое последнее слово не сдвигает новый слайд',
+    tailed.turns.length === 1 && tailed.state.slide === 1 && tailed.state.at === 12,
+    `${tailed.state.slide}/${tailed.state.at}`
+  )
 }
 
 function tapeFrom(slides: string[][], times: number[] = []): Tape {

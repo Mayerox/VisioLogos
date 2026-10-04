@@ -66,9 +66,9 @@ import {
   spellVoiceWords,
   voiceCommand,
   voiceModel,
-  voiceToControl,
-  type VoiceCommand
+  voiceToControl
 } from './voice'
+import type { VoiceCommand, VoiceHeard } from '@shared/voiceSound'
 import type { UpdateStep } from '@shared/update'
 import { expandFiles } from './dropped'
 import {
@@ -321,9 +321,7 @@ export function registerIpc(): void {
     spellVoiceWords(Array.isArray(tokens) ? tokens.map(String).slice(0, 5000) : [])
   )
 
-  ipcMain.handle('voice:heard', (_e, text: string, final: boolean) =>
-    voiceToControl('voice:heard', { text, final })
-  )
+  ipcMain.handle('voice:heard', (_e, heard: VoiceHeard) => voiceToControl('voice:heard', heard))
   ipcMain.handle('voice:status', (_e, status: unknown) =>
     voiceToControl('voice:status', status)
   )
@@ -368,6 +366,12 @@ export function registerIpc(): void {
   ipcMain.handle('app:snapshot', (event) =>
     saveSlideImage(BrowserWindow.fromWebContents(event.sender))
   )
+
+  ipcMain.handle('app:edit', (event, command: unknown) => {
+    if (command === 'cut') event.sender.cut()
+    else if (command === 'copy') event.sender.copy()
+    else if (command === 'paste') event.sender.paste()
+  })
 
   ipcMain.handle('app:quit', () => app.quit())
 

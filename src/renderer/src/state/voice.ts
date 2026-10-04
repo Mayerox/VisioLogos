@@ -1,4 +1,13 @@
 import { create } from 'zustand'
+import {
+  DEFAULT_TUNING,
+  cleanMoment,
+  cleanTuning,
+  type SwitchMoment,
+  type VoiceMeter,
+  type VoiceStatus,
+  type VoiceTuning
+} from '@shared/voiceSound'
 
 export interface VoiceModel {
   installed: boolean
@@ -11,20 +20,16 @@ export interface VoiceStep {
   total?: number
 }
 
-export interface VoiceStatus {
-  state: string
-  error?: string
-  using?: string
-  level?: number
-  devices?: { id: string; label: string }[]
-}
-
 export interface Sung {
   slide: number
 
   pass: number
   times: number
 }
+
+export type VoiceMode = 'follow' | 'check'
+
+const HEARD_EVERY = 125
 
 interface VoiceStore {
   model: VoiceModel | null
@@ -37,9 +42,14 @@ interface VoiceStore {
   deviceId: string | null
 
   heard: string
+  lag: number | null
+  meter: VoiceMeter | null
 
   grammar: string | null
   on: boolean
+  mode: VoiceMode
+  tuning: VoiceTuning
+  moment: SwitchMoment
 
   sung: Sung | null
 
@@ -49,9 +59,12 @@ interface VoiceStore {
   install: () => Promise<void>
   installFile: () => Promise<void>
   setDevice: (id: string | null) => void
-  listen: (on: boolean) => Promise<void>
+  listen: (on: boolean, mode?: VoiceMode) => Promise<void>
   toggle: () => Promise<void>
+  check: () => Promise<void>
   setGrammar: (grammar: string | null) => Promise<void>
+  setTuning: (patch: Partial<VoiceTuning>) => void
+  setMoment: (moment: SwitchMoment) => void
 }
 
 export const useVoice = create<VoiceStore>((set, get) => ({
@@ -63,8 +76,13 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   devices: [],
   deviceId: null,
   heard: '',
+  lag: null,
+  meter: null,
   grammar: null,
   on: false,
+  mode: 'follow',
+  tuning: DEFAULT_TUNING,
+  moment: 'last',
   sung: null,
   prepare: null,
 
@@ -76,19 +94,39 @@ export const useVoice = create<VoiceStore>((set, get) => ({
 
     set({
       model,
-      deviceId: typeof saved.voiceDevice === 'string' ? saved.voiceDevice : null
+      deviceId: typeof saved.voiceDevice === 'string' ? saved.voiceDevice : null,
+      tuning: cleanTuning(saved.voiceTuning),
+      moment: cleanMoment(saved.voiceMoment)
     })
 
     window.api.voice.onStatus((status) => {
+      const { meter, devices, ...rest } = status
+      const was = get().status as unknown as Record<string, unknown>
+      const changed = Object.entries(rest).some(([key, value]) => was[key] !== value)
+
       set({
-        status: { ...get().status, ...status },
-        ...(status.devices ? { devices: status.devices } : {}),
-        ...(status.state === 'error' ? { on: false, error: status.error ?? null } : {}),
+        ...(changed ? { status: { ...get().status, ...rest } } : {}),
+        ...(meter ? { meter } : {}),
+        ...(devices ? { devices } : {}),
+        ...(status.state === 'error'
+          ? { on: false, meter: null, error: status.error ?? null }
+          : {}),
         ...(status.state === 'listening' ? { error: null } : {})
       })
     })
-    window.api.voice.onHeard(({ text }) => {
-      if (text !== get().heard) set({ heard: text })
+
+    let latest = { text: '', lag: 0 }
+    let waiting: ReturnType<typeof setTimeout> | null = null
+    window.api.voice.onHeard(({ text, lag }) => {
+      latest = { text, lag }
+      waiting ??= setTimeout(() => {
+        waiting = null
+        if (!get().on) return
+        set({
+          ...(latest.text !== get().heard ? { heard: latest.text } : {}),
+          lag: Math.round(latest.lag / 10) * 10
+        })
+      }, HEARD_EVERY)
     })
     window.api.voice.onInstallStep((step) => set({ step }))
   },
@@ -120,37 +158,52 @@ export const useVoice = create<VoiceStore>((set, get) => ({
     set({ deviceId: id })
     void window.api.settings.set('voiceDevice', id)
 
-    if (get().on) {
-      void window.api.voice.command({ do: 'start', deviceId: id, grammar: get().grammar })
-    }
+    if (get().on) void get().listen(true, get().mode)
   },
 
-  listen: async (on) => {
+  listen: async (on, mode = 'follow') => {
     if (!on) {
-      set({ on: false, error: null, heard: '', sung: null })
+      set({ on: false, error: null, heard: '', lag: null, meter: null, sung: null })
       await window.api.voice.command({ do: 'stop' })
       set({ status: { state: 'off' } })
       return
     }
 
-    set({ on: true, error: null, heard: '' })
+    set({ on: true, mode, error: null, heard: '', lag: null, sung: null })
     await window.api.voice.command({
       do: 'start',
       deviceId: get().deviceId,
-      grammar: get().grammar
+      grammar: mode === 'follow' ? get().grammar : null,
+      tuning: get().tuning
     })
 
     const prepare = get().prepare
-    if (prepare && get().on) await prepare()
+    if (mode === 'follow' && prepare && get().on) await prepare()
   },
 
-  toggle: () => get().listen(!get().on),
+  toggle: () =>
+    get().on && get().mode === 'follow' ? get().listen(false) : get().listen(true, 'follow'),
+
+  check: () =>
+    get().on && get().mode === 'check' ? get().listen(false) : get().listen(true, 'check'),
 
   setGrammar: async (grammar) => {
     if (grammar === get().grammar) return
     set({ grammar })
-    if (!get().on) return
+    if (!get().on || get().mode !== 'follow') return
 
     await window.api.voice.command({ do: 'grammar', grammar })
+  },
+
+  setTuning: (patch) => {
+    const tuning = cleanTuning({ ...get().tuning, ...patch })
+    set({ tuning })
+    void window.api.settings.set('voiceTuning', tuning)
+    if (get().on) void window.api.voice.command({ do: 'tune', tuning })
+  },
+
+  setMoment: (moment) => {
+    set({ moment })
+    void window.api.settings.set('voiceMoment', moment)
   }
 }))

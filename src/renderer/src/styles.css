@@ -3510,19 +3510,92 @@ button.wide.is-danger {
   font-variant-numeric: tabular-nums;
 }
 
-.voice__level {
-  height: 4px;
-  margin-top: 8px;
-  border-radius: 2px;
-  background: var(--well);
-  overflow: hidden;
+.segmented--2 {
+  grid-template-columns: repeat(2, 1fr);
 }
 
-.voice__level span {
-  display: block;
-  height: 100%;
+.segmented--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.voice__meter {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.voice__bar {
+  display: grid;
+  grid-template-columns: 10px 1fr 24px;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.voice__bar i {
+  font-style: normal;
+}
+
+.voice__bar.is-used i {
+  color: var(--text-1);
+}
+
+.voice__bar b {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.voice__track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--glow-1);
+}
+
+.voice__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
   background: var(--text-2);
-  transition: width 120ms linear;
+  transition: width 80ms linear;
+}
+
+.voice__bar:not(.is-used) .voice__fill {
+  opacity: 0.45;
+}
+
+.voice__fill.is-clip {
+  background: var(--live);
+}
+
+.voice__gate {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--text-3);
+}
+
+.voice__more {
+  margin-top: 8px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.voice__more summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.voice__more summary:hover {
+  color: var(--text-2);
+}
+
+.voice__more[open] {
+  display: grid;
+  gap: 8px;
 }
 
 .voice__warn {
@@ -3708,6 +3781,20 @@ button.wide.is-danger {
 
 .cathead__more:hover:not(:disabled) {
   color: var(--text-1);
+}
+
+.songlib {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  overflow-y: auto;
+}
+
+.songlib > .tree {
+  flex: 1 0 auto;
+  overflow: visible;
 }
 
 .catloose {
