@@ -54,6 +54,7 @@ export function VoiceFollow(): React.JSX.Element | null {
   const tuning = useVoice((s) => s.tuning)
   const moment = useVoice((s) => s.moment)
   const sung = useVoice((s) => s.sung)
+  const record = useVoice((s) => s.record)
 
   const slides = useSongs((s) => s.slides)
   const index = useSongs((s) => s.index)
@@ -75,7 +76,10 @@ export function VoiceFollow(): React.JSX.Element | null {
   return (
     <div className="songctl">
       <div className="songctl__head">
-        <span>{t('voice.panel')}</span>
+        <span>
+          {t('voice.panel')}
+          <span className="badge voice__beta">{t('voice.beta')}</span>
+        </span>
         {on && (
           <b>
             {t(
@@ -88,6 +92,8 @@ export function VoiceFollow(): React.JSX.Element | null {
           </b>
         )}
       </div>
+
+      <p className="voice__beta-note">{t('voice.betaHint')}</p>
 
       {!ready ? (
         <div className="voice__need">
@@ -243,6 +249,22 @@ export function VoiceFollow(): React.JSX.Element | null {
                 ))}
               </div>
             </div>
+
+            <label className="checkbox" title={t('voice.recordHint')}>
+              <input
+                type="checkbox"
+                checked={record}
+                onChange={(e) => voice.setRecord(e.target.checked)}
+              />
+              {t('voice.record')}
+            </label>
+            <button
+              className="chip"
+              title={t('voice.journalHint')}
+              onClick={() => void window.api.voice.openJournal()}
+            >
+              {t('voice.journal')}
+            </button>
           </details>
 
           {on && heard && <p className="voice__heard">{t('voice.heard', { text: heard })}</p>}

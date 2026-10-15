@@ -12,7 +12,7 @@ import { voiceFile } from './voice'
 const SCHEME = 'visio'
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif', '.avif'])
-const VIDEO_EXT = new Set(['.mp4', '.webm', '.mkv', '.mov'])
+const VIDEO_EXT = new Set(['.mp4', '.webm', '.mkv', '.mov', '.m4v'])
 
 const dir = (): string => join(app.getPath('userData'), 'backgrounds')
 
@@ -149,15 +149,19 @@ export async function listUserBackgrounds(): Promise<BackgroundItem[]> {
   return [...fills, ...pictures]
 }
 
+const PICK_IMAGES = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'avif']
+const PICK_VIDEOS = ['mp4', 'webm', 'mov', 'm4v', 'mkv']
+
 export async function addBackgroundsFromDialog(
-  parent: BrowserWindow | null
+  parent: BrowserWindow | null,
+  onlyVideo = false
 ): Promise<BackgroundItem[]> {
   const result = await dialog.showOpenDialog(parent ?? undefined!, {
-    title: 'Выберите картинки или видео для фона',
+    title: t(onlyVideo ? 'bg.pickVideo' : 'bg.pickAny'),
     properties: ['openFile', 'multiSelections'],
-    filters: [
-      { name: 'Картинки и видео', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'mp4', 'webm'] }
-    ]
+    filters: onlyVideo
+      ? [{ name: t('bg.videoFiles'), extensions: PICK_VIDEOS }]
+      : [{ name: t('bg.anyFiles'), extensions: [...PICK_IMAGES, ...PICK_VIDEOS] }]
   })
   if (result.canceled) return listUserBackgrounds()
 

@@ -87,6 +87,7 @@ import {
   feed,
   followFrom,
   hear,
+  lexiconOf,
   normalizeWord,
   phrasesOf,
   plainLine,
@@ -129,6 +130,7 @@ import {
   BUILTIN_BACKGROUNDS,
   colorForLuminance,
   flatLuminance,
+  isLive,
   readableOn,
   readableTextColor,
   shadowHex,
@@ -565,6 +567,20 @@ function checkBackgrounds(): void {
       .map((b) => b.name)
       .join(', ')
   )
+
+  const unnamed = BUILTIN_BACKGROUNDS.filter(
+    (b) => !b.nameKey || !(b.nameKey in ru) || !(b.nameKey in en)
+  ).map((b) => b.id)
+  check('у каждого встроенного фона есть название', unnamed.length === 0, unnamed.join(', '))
+
+  const moving = BUILTIN_BACKGROUNDS.filter((b) => isLive(b.background))
+  check('живых встроенных фонов не меньше трёх', moving.length >= 3, String(moving.length))
+  check(
+    'у живого фона есть неподвижная замена на случай без анимации',
+    moving.every((b) => b.background.kind === 'gradient' && b.background.css.length > 0)
+  )
+  check('видео — тоже живой фон', isLive({ kind: 'video', src: 'x.mp4' }))
+  check('обычный градиент — не живой', !isLive(night))
 
   const textured = ['paper', 'parchment'].map((id) => find(id).background)
   check(
@@ -1320,6 +1336,33 @@ function checkSingAlong(): void {
   check('незнакомое слово с дефисом — по частям', spellWith(known, 'бог-отец').join(' ') === 'бог отец')
   check('незнакомое слово модуль не услышит', spellWith(known, 'агнцу').length === 0)
 
+  const disguised = tokensOf('Tы иcкупил миp oт гpexa, Bce').join(' ')
+  check(
+    'латинские двойники русских букв становятся русскими',
+    disguised === 'ты искупил мир от греха все',
+    disguised
+  )
+  const english = tokensOf('Hey, come to me').join(' ')
+  check('английская строка остаётся английской', english === 'hey come to me', english)
+
+  const lexicon = lexiconOf(
+    new Set(['преклониться', 'поклонимся', 'упование', 'во', 'споём', 'слава', 'агнец'])
+  )
+  const alike = (word: string): string => spellWith(lexicon.known, word, lexicon).join(' ')
+  check(
+    'нет слова в словаре — берём похожее по звучанию',
+    alike('упованье') === 'упование',
+    alike('упованье')
+  )
+  check(
+    'похожее по началу важнее похожего по концу',
+    alike('преклонимся') === 'преклониться',
+    alike('преклонимся')
+  )
+  check('или складываем из двух знакомых', alike('воспоём') === 'во споём', alike('воспоём'))
+  check('совсем непохожее не подменяется', alike('благодать') === '', alike('благодать'))
+  check('короткое незнакомое не подменяется', alike('спо') === '', alike('спо'))
+
   const vocabulary = vocabularyFromText('<eps> 0\n!SIL 1\n[unk] 2\nбог 3\nмоё 4\n')
   check(
     'словарь из words.txt без служебных слов',
@@ -1557,6 +1600,20 @@ function checkVoiceSound(): void {
   const hot = flat()
   shape(hot, Float32Array.from({ length: RATE }, (_, i) => (i % 40 < 20 ? 1 : -1)))
   check('перегруз виден на индикаторе', hot.meter().clip)
+
+  const boom = levelOf(shape(flat(), tone(100, -20, 2)), 1)
+  check('бас и бочка на 100 Гц срезаны больше чем на 12 дБ', boom < -32, `${boom.toFixed(1)} дБ`)
+  const low = levelOf(shape(flat(), tone(300, -20, 2)), 1)
+  check('низкий голос на 300 Гц почти не тронут', near(low, -20, 2), `${low.toFixed(1)} дБ`)
+
+  const burst = shape(flat({ gainDb: 12 }), tone(1000, -6, 1))
+  const top = burst.reduce((most, v) => Math.max(most, Math.abs(v)), 0)
+  const flatTop = burst.filter((v) => Math.abs(v) >= 0.999).length
+  check(
+    'громкий всплеск сжат ограничителем, а не срезан в упор',
+    top <= 0.9 && flatTop === 0,
+    `пик ${top.toFixed(3)}, в упор ${flatTop}`
+  )
 
   const step = new VoiceShaper(RATE, DEFAULT_TUNING)
   shape(step, tone(400, -30, 0.5))

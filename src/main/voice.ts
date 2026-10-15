@@ -5,6 +5,7 @@ import { t } from '@shared/i18n'
 import { askSite, readAll } from './siteFetch'
 import type { VoiceCommand } from '@shared/voiceSound'
 import { forgetVocabulary, spellForVoice } from './voiceWords'
+import { journalStart, journalStop } from './voiceJournal'
 
 const SOURCE = 'https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip'
 
@@ -143,6 +144,9 @@ function listener(): BrowserWindow {
 }
 
 export function voiceCommand(command: VoiceCommand): void {
+  if (command.do === 'start') journalStart(Boolean(command.record))
+  else if (command.do === 'stop') journalStop()
+
   const where = listener()
 
   if (where.webContents.isLoading()) {
@@ -160,6 +164,7 @@ export function voiceToControl(channel: string, payload: unknown): void {
 }
 
 export function closeVoice(): void {
+  journalStop()
   if (page && !page.isDestroyed()) page.destroy()
   page = null
 }

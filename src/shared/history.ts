@@ -10,6 +10,26 @@ export interface Release {
 
 export const HISTORY: Release[] = [
   {
+    version: '1.0.2',
+    date: '2026-10-15',
+    ru: [
+      'Живые фоны: в панели «Фон» появился раздел «Живые» — четыре встроенных движущихся фона («Огоньки», «Волны», «Звёзды», «Облака») и кнопка «Загрузить видео…» для своих роликов mp4, webm или mov. Фон идёт по кругу без звука и не начинается заново при смене слайда.',
+      'Листание по голосу понимает тексты, где русские буквы набраны латинскими двойниками, как на многих сайтах песен, а слова, которых нет в словаре голосового модуля, слышит по похожим на них.',
+      'Звук для распознавания очищается сильнее: бас и бочка срезаются круче, громкие всплески мягко сжимаются. На записях двадцати трёх песен слайды переключились 88 раз из 100 нужных вместо 63.',
+      'Вход «по умолчанию» Windows больше не выбирается — программа сама находит USB-вход. «Проверить звук» при открытой песне ищет в звуке её слова, как при листании.',
+      'Журнал листания: что программа слышала, когда переключала слайды и каких слов песни не знает; по желанию — с записью звука для разбора («Настройка звука» → «Открыть журнал»).',
+      'Листание по голосу помечено как функция в тестировании; у фонов «Глубина» и «Бордо» снова видны названия.'
+    ],
+    en: [
+      'Live backgrounds: the “Background” panel has a new “Live” section — four built-in moving backgrounds (“Lights”, “Waves”, “Stars”, “Clouds”) and an “Upload a video…” button for your own mp4, webm or mov clips. The background loops silently and does not restart when the slide changes.',
+      'Turning slides by voice understands lyrics where Russian letters are typed with Latin look-alikes, as on many song sites, and hears words missing from the voice module dictionary through similar ones.',
+      'The sound for recognition is cleaned more: bass and kick drum are cut more steeply, loud bursts are softly compressed. On recordings of twenty-three songs the slides turned 88 times out of 100 needed instead of 63.',
+      'The Windows “default” input is no longer chosen — the program finds the USB input by itself. With a song open, “Check sound” listens for its words, just as when turning slides.',
+      'A journal of turning slides: what the program heard, when it turned slides and which words of the song it does not know; optionally with a sound recording for review (“Sound settings” → “Open the journal”).',
+      'Turning slides by voice is marked as a feature in testing; the “Depth” and “Bordeaux” backgrounds show their names again.'
+    ]
+  },
+  {
     version: '1.0.1',
     date: '2026-10-05',
     ru: [

@@ -31,12 +31,37 @@ export function plainLine(html: string): string {
     .trim()
 }
 
+const LOOKALIKE: Record<string, string> = {
+  a: 'а',
+  b: 'в',
+  c: 'с',
+  e: 'е',
+  h: 'н',
+  k: 'к',
+  m: 'м',
+  o: 'о',
+  p: 'р',
+  t: 'т',
+  x: 'х',
+  y: 'у'
+}
+
+const RUSSIAN = /[а-яё]/
+
+export function cyrillicLook(word: string, russianLine: boolean): string {
+  const mixed = RUSSIAN.test(word) && /[a-z]/.test(word)
+  const disguised = russianLine && /^[abcehkmoptxy]+$/.test(word)
+  return mixed || disguised ? word.replace(/[abcehkmoptxy]/g, (ch) => LOOKALIKE[ch]) : word
+}
+
 export function tokensOf(line: string): string[] {
-  return line
-    .toLowerCase()
+  const lower = line.toLowerCase()
+  const russianLine = RUSSIAN.test(lower)
+  return lower
     .split(/\s+/)
     .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
     .filter((word) => /[\p{L}\p{N}]/u.test(word))
+    .map((word) => cyrillicLook(word, russianLine))
 }
 
 function knownForm(known: Set<string>, word: string): string | null {
@@ -53,17 +78,87 @@ function knownForm(known: Set<string>, word: string): string | null {
   return null
 }
 
-export function spellWith(known: Set<string>, token: string): string[] {
+export interface Lexicon {
+  known: Set<string>
+  starts: Map<string, { plain: string; word: string }[]>
+}
+
+export function lexiconOf(known: Set<string>): Lexicon {
+  const starts: Lexicon['starts'] = new Map()
+  for (const word of known) {
+    if (word.length < 3 || !/^[а-яё]+$/.test(word)) continue
+    const plain = word.replace(/ё/g, 'е')
+    let list = starts.get(plain[0])
+    if (!list) starts.set(plain[0], (list = []))
+    list.push({ plain, word })
+  }
+  return { known, starts }
+}
+
+const sharedStart = (a: string, b: string): number => {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  return i
+}
+
+function nearestKnown(lexicon: Lexicon, plain: string): { word: string; slips: number } | null {
+  const limit = plain.length <= 5 ? 1 : plain.length <= 9 ? 2 : 3
+  let best: { word: string; slips: number; start: number; gap: number } | null = null
+  for (const one of lexicon.starts.get(plain[0]) ?? []) {
+    const gap = Math.abs(one.plain.length - plain.length)
+    if (gap > limit) continue
+    const d = slips(plain, one.plain, limit)
+    if (d > limit) continue
+    const start = sharedStart(plain, one.plain)
+    if (
+      !best ||
+      d < best.slips ||
+      (d === best.slips && (start > best.start || (start === best.start && gap < best.gap)))
+    ) {
+      best = { word: one.word, slips: d, start, gap }
+    }
+  }
+  return best
+}
+
+function splitKnown(known: Set<string>, plain: string): string[] | null {
+  let best: { parts: string[]; score: number } | null = null
+  for (let i = 2; i <= plain.length - 2; i++) {
+    const left = knownForm(known, plain.slice(0, i))
+    const right = knownForm(known, plain.slice(i))
+    if (!left || !right) continue
+    const score = Math.min(left.length, right.length)
+    if (!best || score > best.score) best = { parts: [left, right], score }
+  }
+  return best?.parts ?? null
+}
+
+export function soundAlike(lexicon: Lexicon, word: string): string[] {
+  const plain = word.replace(/ё/g, 'е')
+  if (plain.length < 4 || !/^[а-я]+$/.test(plain)) return []
+
+  const near = nearestKnown(lexicon, plain)
+  if (near && near.slips <= 1) return [near.word]
+
+  const split = splitKnown(lexicon.known, plain)
+  if (split) return split
+
+  return near ? [near.word] : []
+}
+
+export function spellWith(known: Set<string>, token: string, lexicon?: Lexicon): string[] {
   const word = token.toLowerCase()
   const whole = knownForm(known, word)
   if (whole) return [whole]
 
-  if (!word.includes('-')) return []
-  return word
-    .split('-')
-    .filter(Boolean)
-    .map((part) => knownForm(known, part))
-    .filter((part): part is string => part !== null)
+  const alike = (part: string): string[] => {
+    const found = knownForm(known, part)
+    if (found) return [found]
+    return lexicon ? soundAlike(lexicon, part) : []
+  }
+
+  if (!word.includes('-')) return alike(word)
+  return word.split('-').filter(Boolean).flatMap(alike)
 }
 
 const SPECIAL = new Set(['<eps>', '!sil', '[unk]', '<s>', '</s>', '<unk>', '#0'])

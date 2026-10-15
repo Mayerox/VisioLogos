@@ -27,7 +27,7 @@ interface LookStore {
   setBackground: (scope: LookScope, background: Background) => void
   resetLook: (scope: LookScope) => void
   loadBackgrounds: () => Promise<void>
-  addBackgrounds: () => Promise<void>
+  addBackgrounds: (only?: 'video') => Promise<void>
   deleteBackground: (id: string) => Promise<void>
   saveTemplate: (name: string, style: SlideStyle, background: Background) => void
   deleteTemplate: (id: string) => void
@@ -100,8 +100,8 @@ export const useLook = create<LookStore>((set, get) => ({
   loadBackgrounds: async () =>
     set({ userBackgrounds: await window.api.backgrounds.list() }),
 
-  addBackgrounds: async () =>
-    set({ userBackgrounds: await window.api.backgrounds.add() }),
+  addBackgrounds: async (only) =>
+    set({ userBackgrounds: await window.api.backgrounds.add(only) }),
 
   deleteBackground: async (id) =>
     set({ userBackgrounds: await window.api.backgrounds.remove(id) }),

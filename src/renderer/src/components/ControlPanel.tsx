@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Background, BackgroundItem, SlideStyle } from '@shared/types'
 import {
   backgroundCss,
   backgroundName,
   colorForLuminance,
+  isLive,
   readableOn
 } from '@shared/backgrounds'
 import type { Key } from '@shared/i18n'
 import { ptOfVh, TEXT_SIZES, vhOfPt } from '@shared/slide'
 import { brightnessOf } from '../lib/backLight'
 import { ColorPicker } from './ColorPicker'
+import { MotionLayer } from './MotionLayer'
 import { Select } from './Select'
 import { allBackgrounds, useLook } from '../state/look'
 import { useT } from '../state/i18n'
@@ -379,7 +381,9 @@ function BackgroundTab({ target }: { target: ControlTarget }): React.JSX.Element
     </div>
   )
 
-  const own = items.filter((item) => !item.builtin)
+  const still = items.filter((item) => !isLive(item.background))
+  const moving = items.filter((item) => isLive(item.background))
+  const own = still.filter((item) => !item.builtin)
   const scope = target.ownBackground
 
   return (
@@ -397,10 +401,20 @@ function BackgroundTab({ target }: { target: ControlTarget }): React.JSX.Element
       )}
 
       <div className="gallery__title">{t('control.bgDark')}</div>
-      {group(items.filter((item) => item.tone === 'dark'))}
+      {group(still.filter((item) => item.builtin && item.tone === 'dark'))}
 
       <div className="gallery__title">{t('control.bgLight')}</div>
-      {group(items.filter((item) => item.tone === 'light'))}
+      {group(still.filter((item) => item.builtin && item.tone === 'light'))}
+
+      <div className="gallery__title">{t('control.bgLive')}</div>
+      {group(moving)}
+      <button
+        className="wide"
+        title={t('control.bgAddVideoHint')}
+        onClick={() => void addBackgrounds('video')}
+      >
+        {t('control.bgAddVideo')}
+      </button>
 
       {own.length > 0 && (
         <>
@@ -432,18 +446,26 @@ function BackgroundCell({
   onDelete?: () => void
 }): React.JSX.Element {
   const t = useT()
+  const [hover, setHover] = useState(false)
+  const bg = item.background
 
   return (
-    <div className={`gallery__cell ${active ? 'is-active' : ''}`}>
+    <div
+      className={`gallery__cell ${active ? 'is-active' : ''}`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
       <button
         className="gallery__thumb"
-        style={{ background: backgroundCss(item.background) }}
+        style={{ background: backgroundCss(bg) }}
         title={backgroundName(item)}
         onClick={onPick}
       >
-        {item.background.kind === 'video' && (
-          <span className="gallery__badge">{t('control.bgVideo')}</span>
+        {bg.kind === 'gradient' && bg.motion && (
+          <MotionLayer motion={bg.motion} live={hover} className="gallery__live" />
         )}
+        {bg.kind === 'video' && <VideoThumb src={bg.src} playing={hover} />}
+        {bg.kind === 'video' && <span className="gallery__badge">{t('control.bgVideo')}</span>}
       </button>
       {onDelete && (
         <button className="gallery__x" title={t('control.bgRemove')} onClick={onDelete}>
@@ -451,6 +473,29 @@ function BackgroundCell({
         </button>
       )}
     </div>
+  )
+}
+
+function VideoThumb({ src, playing }: { src: string; playing: boolean }): React.JSX.Element {
+  const ref = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const video = ref.current
+    if (!video) return
+    if (playing) void video.play().catch(() => undefined)
+    else video.pause()
+  }, [playing])
+
+  return (
+    <video
+      ref={ref}
+      className="gallery__live"
+      src={`${src}#t=1`}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+    />
   )
 }
 

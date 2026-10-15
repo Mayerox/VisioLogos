@@ -22,6 +22,7 @@ interface Built {
   grammar: string | null
   text: string
   song: string | null
+  notes: string[]
 }
 
 const textKey = (slides: SongSlide[]): string =>
@@ -30,6 +31,10 @@ const textKey = (slides: SongSlide[]): string =>
 const timesOf = (slides: SongSlide[]): string => slides.map((one) => one.times).join(',')
 
 const early = (): boolean => useVoice.getState().moment === 'early'
+
+const at = (ms: number): string => `${(ms / 1000).toFixed(1)} с`
+
+const note = (line: string): void => window.api.voice.note(line)
 
 const following = (): boolean => {
   const voice = useVoice.getState()
@@ -85,12 +90,32 @@ export function startVoiceFollow(): () => void {
 
     const phrases = lines.flat().map((line) => line.flatMap(parts))
 
+    const missing = tokens.filter((token) => parts(token).length === 0)
+    const swapped = tokens.filter((token) => {
+      const found = parts(token).join(' ')
+      return found !== '' && normalizeWord(found) !== normalizeWord(token)
+    })
+    const slideLine = (one: SongSlide, index: number): string => {
+      const times = one.times > 1 ? ` ×${one.times}` : ''
+      const text = one.slide.blocks.map((b) => plainLine(b.html)).join(' / ')
+      return `  [${index + 1}]${times} ${text}`
+    }
+    const notes = [
+      `песня: ${draft?.title ?? '—'} · слайдов: ${slides.length}`,
+      ...slides.map(slideLine),
+      missing.length ? `  модуль не знает: ${missing.join(', ')}` : '',
+      swapped.length
+        ? `  слышит как: ${swapped.map((one) => `${one} → ${parts(one).join(' ')}`).join(', ')}`
+        : ''
+    ].filter(Boolean)
+
     return {
       tape: tapeOf(tapeSlides, early()),
       slides: tapeSlides,
       grammar: phrases.some((one) => one.length > 0) ? phrasesOf(phrases) : null,
       text: textKey(slides),
-      song: draft?.id ?? null
+      song: draft?.id ?? null,
+      notes
     }
   }
 
@@ -106,6 +131,7 @@ export function startVoiceFollow(): () => void {
     if (!next) return built?.grammar ?? null
 
     built = next
+    for (const line of next.notes) note(line)
     expecting = -1
     restart(useSongs.getState().index)
 
@@ -135,7 +161,7 @@ export function startVoiceFollow(): () => void {
   useVoice.setState({ prepare: refresh })
 
   const offSongs = useSongs.subscribe((after, before) => {
-    if (!following()) return
+    if (!useVoice.getState().on) return
 
     if (after.draft?.id !== before.draft?.id || after.slides !== before.slides) {
       const text = textKey(after.slides)
@@ -143,22 +169,29 @@ export function startVoiceFollow(): () => void {
         void refresh()
         return
       }
+      if (!following()) return
       const sameCount = built.slides.length === after.slides.length
       if (sameCount && timesOf(after.slides) !== built.slides.map((one) => one.times).join(',')) {
         retime(built.slides.map((one, i) => ({ ...one, times: after.slides[i].times })))
       }
     }
 
-    if (after.index !== before.index) {
+    if (after.index !== before.index && following()) {
       if (after.index === expecting) {
         expecting = -1
         return
       }
+      note(`оператор: слайд ${after.index + 1}`)
       restart(after.index)
     }
   })
 
-  const offHeard = window.api.voice.onHeard(({ text, final }) => {
+  const offHeard = window.api.voice.onHeard((heard) => {
+    const { text, final } = heard
+    if (final) {
+      const sure = heard.conf !== undefined ? ` (${heard.conf.toFixed(2)})` : ''
+      note(`${at(heard.at)} = ${text}${sure}`)
+    }
     if (!following() || !built || !state) {
       utter = null
       return
@@ -169,8 +202,14 @@ export function startVoiceFollow(): () => void {
     utter = final ? null : result.utter
     publish()
 
+    for (const step of result.steps) {
+      if (step.kind !== 'again') continue
+      note(`${at(heard.at)} >>> повтор ${step.pass + 1} («${text}»)`)
+    }
     for (const step of [...result.steps].reverse()) {
       if (step.kind === 'turn' || step.kind === 'jump') {
+        const how = step.kind === 'jump' ? ' (прыжок)' : ''
+        note(`${at(heard.at)} >>> слайд ${step.to + 1}${how} («${text}»)`)
         void go(step.to)
         break
       }

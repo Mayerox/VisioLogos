@@ -1,6 +1,6 @@
 {
   "name": "visiologos",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Программа для вывода текстов, песен и презентаций на проектор во время церковных служений",
   "main": "./out/main/index.js",
   "author": "",
@@ -117,7 +117,11 @@
       "icon": "resources/icon.png",
       "category": "public.app-category.productivity",
       "darkModeSupport": true,
-      "identity": null,
+      "identity": "-",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "VisioLogos слушает пение, чтобы сам переключать слайды песни."
+      },
       "artifactName": "VisioLogos-${version}-${arch}.${ext}"
     },
     "dmg": {

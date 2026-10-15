@@ -31,6 +31,26 @@ export type VoiceMode = 'follow' | 'check'
 
 const HEARD_EVERY = 125
 
+const WINDOWS_ALIASES = new Set(['default', 'communications'])
+
+const NOTE_METER_MS = 5000
+
+const at = (ms: number | undefined): string => `${((ms ?? 0) / 1000).toFixed(1)} с`
+
+const meterLine = (meter: VoiceMeter): string =>
+  [
+    `${at(meter.at)} звук`,
+    `L ${Math.round(meter.left)}`,
+    meter.channels > 1 ? `R ${Math.round(meter.right)}` : '',
+    `канал ${meter.use}`,
+    `усиление ${meter.gainDb}`,
+    meter.open ? 'голос' : 'тишина',
+    meter.clip ? 'ПЕРЕГРУЗ' : '',
+    meter.lost ? `потеряно ${meter.lost} мс` : ''
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
 interface VoiceStore {
   model: VoiceModel | null
 
@@ -50,6 +70,7 @@ interface VoiceStore {
   mode: VoiceMode
   tuning: VoiceTuning
   moment: SwitchMoment
+  record: boolean
 
   sung: Sung | null
 
@@ -65,6 +86,7 @@ interface VoiceStore {
   setGrammar: (grammar: string | null) => Promise<void>
   setTuning: (patch: Partial<VoiceTuning>) => void
   setMoment: (moment: SwitchMoment) => void
+  setRecord: (record: boolean) => void
 }
 
 export const useVoice = create<VoiceStore>((set, get) => ({
@@ -83,6 +105,7 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   mode: 'follow',
   tuning: DEFAULT_TUNING,
   moment: 'last',
+  record: false,
   sung: null,
   prepare: null,
 
@@ -92,17 +115,38 @@ export const useVoice = create<VoiceStore>((set, get) => ({
       window.api.settings.all()
     ])
 
+    const device = typeof saved.voiceDevice === 'string' ? saved.voiceDevice : null
     set({
       model,
-      deviceId: typeof saved.voiceDevice === 'string' ? saved.voiceDevice : null,
+      deviceId: device && !WINDOWS_ALIASES.has(device) ? device : null,
       tuning: cleanTuning(saved.voiceTuning),
-      moment: cleanMoment(saved.voiceMoment)
+      moment: cleanMoment(saved.voiceMoment),
+      record: saved.voiceRecord === true
     })
+
+    let noted = 0
 
     window.api.voice.onStatus((status) => {
       const { meter, devices, ...rest } = status
       const was = get().status as unknown as Record<string, unknown>
       const changed = Object.entries(rest).some(([key, value]) => was[key] !== value)
+
+      if (changed && rest.state && rest.state !== was.state) {
+        window.api.voice.note(
+          [
+            `--- ${rest.state}`,
+            rest.using ? `вход: ${rest.using}` : '',
+            rest.channels ? `каналов: ${rest.channels}` : '',
+            rest.error ? `ошибка: ${rest.error}` : ''
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        )
+      }
+      if (meter && Date.now() - noted >= NOTE_METER_MS) {
+        noted = Date.now()
+        window.api.voice.note(meterLine(meter))
+      }
 
       set({
         ...(changed ? { status: { ...get().status, ...rest } } : {}),
@@ -173,12 +217,21 @@ export const useVoice = create<VoiceStore>((set, get) => ({
     await window.api.voice.command({
       do: 'start',
       deviceId: get().deviceId,
-      grammar: mode === 'follow' ? get().grammar : null,
-      tuning: get().tuning
+      grammar: get().grammar,
+      tuning: get().tuning,
+      record: get().record
     })
+    window.api.voice.note(
+      [
+        `режим: ${mode === 'follow' ? 'листание' : 'проверка звука'}`,
+        `вход: ${get().deviceId ?? 'авто'}`,
+        `настройка: ${JSON.stringify(get().tuning)}`,
+        `смена: ${get().moment}`
+      ].join(' · ')
+    )
 
     const prepare = get().prepare
-    if (mode === 'follow' && prepare && get().on) await prepare()
+    if (prepare && get().on) await prepare()
   },
 
   toggle: () =>
@@ -190,7 +243,7 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   setGrammar: async (grammar) => {
     if (grammar === get().grammar) return
     set({ grammar })
-    if (!get().on || get().mode !== 'follow') return
+    if (!get().on) return
 
     await window.api.voice.command({ do: 'grammar', grammar })
   },
@@ -205,5 +258,11 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   setMoment: (moment) => {
     set({ moment })
     void window.api.settings.set('voiceMoment', moment)
+  },
+
+  setRecord: (record) => {
+    set({ record })
+    void window.api.settings.set('voiceRecord', record)
+    if (get().on) void get().listen(true, get().mode)
   }
 }))

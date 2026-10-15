@@ -93,10 +93,12 @@ export interface SlideStyle {
   dividers: boolean
 }
 
+export type Motion = 'bokeh' | 'waves' | 'stars' | 'clouds'
+
 export type Background =
   | { kind: 'color'; color: string }
 
-  | { kind: 'gradient'; css: string }
+  | { kind: 'gradient'; css: string; motion?: Motion }
 
   | { kind: 'image'; src: string; fit?: 'cover' | 'contain' }
   | { kind: 'video'; src: string }

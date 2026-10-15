@@ -1,4 +1,4 @@
-import type { BackgroundItem } from './types'
+import type { Background, BackgroundItem, Motion } from './types'
 import { t, type Key } from './i18n'
 
 const dark = (id: string, css: string): BackgroundItem => ({
@@ -27,6 +27,18 @@ const flat = (id: string, color: string, tone: 'dark' | 'light'): BackgroundItem
   tone,
   background: { kind: 'color', color }
 })
+
+const live = (id: Motion, css: string, tone: 'dark' | 'light'): BackgroundItem => ({
+  id,
+  name: '',
+  nameKey: `bg.${id}`,
+  builtin: true,
+  tone,
+  background: { kind: 'gradient', css, motion: id }
+})
+
+export const isLive = (bg: Background): boolean =>
+  bg.kind === 'video' || (bg.kind === 'gradient' && Boolean(bg.motion))
 
 export const backgroundName = (item: BackgroundItem): string =>
   item.nameKey ? t(item.nameKey as Key) : item.name
@@ -122,7 +134,28 @@ export const BUILTIN_BACKGROUNDS: BackgroundItem[] = [
   light(
     'sky', `${softVignette}, linear-gradient(160deg, #edf4ff 0%, #d3e2f6 100%)`),
   light(
-    'mint', `${softVignette}, linear-gradient(160deg, #eef7f2 0%, #d5e8dd 100%)`)
+    'mint', `${softVignette}, linear-gradient(160deg, #eef7f2 0%, #d5e8dd 100%)`),
+
+  live(
+    'bokeh',
+    `${vignette}, radial-gradient(16% 28% at 28% 62%, rgba(255,190,110,.28), rgba(0,0,0,0) 70%), ` +
+      'radial-gradient(12% 22% at 72% 34%, rgba(150,185,255,.22), rgba(0,0,0,0) 70%), ' +
+      'linear-gradient(180deg, #120e12 0%, #0a0c18 100%)',
+    'dark'
+  ),
+  live(
+    'waves',
+    `${vignette}, radial-gradient(80% 22% at 50% 52%, rgba(80,150,255,.22), rgba(0,0,0,0) 75%), ` +
+      'linear-gradient(180deg, #050b1c 0%, #0a1a36 50%, #040914 100%)',
+    'dark'
+  ),
+  live(
+    'stars',
+    'radial-gradient(60% 40% at 65% 30%, rgba(120,90,200,.18), rgba(0,0,0,0) 75%), ' +
+      'linear-gradient(180deg, #03050f 0%, #0b1330 100%)',
+    'dark'
+  ),
+  live('clouds', 'linear-gradient(180deg, #b9d5f1 0%, #dcebf9 60%, #eef5fc 100%)', 'light')
 ]
 
 export const DEFAULT_BACKGROUND = BUILTIN_BACKGROUNDS[0].background

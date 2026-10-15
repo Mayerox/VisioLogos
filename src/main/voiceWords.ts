@@ -1,11 +1,21 @@
 import { readFile } from 'node:fs/promises'
 import { unzip, unzipSync, type Unzipped } from 'fflate'
-import { spellWith, vocabularyFromFst, vocabularyFromText } from '@shared/singAlong'
+import {
+  lexiconOf,
+  spellWith,
+  vocabularyFromFst,
+  vocabularyFromText,
+  type Lexicon
+} from '@shared/singAlong'
 
 let loading: { path: string; words: Promise<Set<string> | null> } | null = null
+let lexicon: { words: Set<string>; lexicon: Lexicon } | null = null
+const spelled = new Map<string, string[]>()
 
 export function forgetVocabulary(): void {
   loading = null
+  lexicon = null
+  spelled.clear()
 }
 
 const wanted = (name: string): boolean =>
@@ -65,9 +75,21 @@ export async function spellForVoice(
   const known = await vocabulary(path)
   if (!known || known.size === 0) return null
 
+  if (lexicon?.words !== known) {
+    lexicon = { words: known, lexicon: lexiconOf(known) }
+    spelled.clear()
+  }
+
   const out: Record<string, string[]> = {}
   for (const token of tokens) {
-    if (typeof token === 'string' && token) out[token] = spellWith(known, token)
+    if (typeof token !== 'string' || !token) continue
+    let parts = spelled.get(token)
+    if (!parts) {
+      parts = spellWith(known, token, lexicon.lexicon)
+      if (spelled.size > 20_000) spelled.clear()
+      spelled.set(token, parts)
+    }
+    out[token] = parts
   }
   return out
 }

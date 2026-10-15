@@ -10,6 +10,7 @@ import type {
 import { backgroundCss, textShadowCss } from '@shared/backgrounds'
 import { DEFAULT_ASPECT, MAX_FONT_VH } from '@shared/slide'
 import { askFont, useDevicePixelRatio, useFontTick } from '../lib/slideFonts'
+import { MotionLayer } from './MotionLayer'
 
 export const STAGE_W = 1920
 
@@ -143,6 +144,8 @@ export function SlideView({
   const padY = style ? (stageH * style.paddingPct) / 100 : 0
 
   const video = slide?.background.kind === 'video' && !blackout ? slide.background.src : null
+  const motion =
+    slide?.background.kind === 'gradient' && !blackout ? (slide.background.motion ?? null) : null
   const fill =
     blackout || !slide || video ? '#000' : backgroundCss(slide.background)
   const textVisible = slide && !blackout && !hideText
@@ -159,7 +162,18 @@ export function SlideView({
         aspectRatio: aspect && aspect > 0 ? String(aspect) : undefined
       }}
     >
-      {video && <video className="slide__video" src={video} autoPlay loop muted />}
+      {video && (
+        <video
+          className="slide__video"
+          src={video}
+          autoPlay
+          loop
+          muted
+          playsInline
+          disablePictureInPicture
+        />
+      )}
+      {motion && <MotionLayer motion={motion} className="slide__video" />}
 
       {showSafeArea && <div className="slide__safe-area" />}
 

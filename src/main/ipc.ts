@@ -69,6 +69,7 @@ import {
   voiceToControl
 } from './voice'
 import type { VoiceCommand, VoiceHeard } from '@shared/voiceSound'
+import { journalLine, journalSound, openJournal } from './voiceJournal'
 import type { UpdateStep } from '@shared/update'
 import { expandFiles } from './dropped'
 import {
@@ -216,8 +217,8 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle('backgrounds:list', () => listUserBackgrounds())
-  ipcMain.handle('backgrounds:add', (event) =>
-    addBackgroundsFromDialog(BrowserWindow.fromWebContents(event.sender))
+  ipcMain.handle('backgrounds:add', (event, only: unknown) =>
+    addBackgroundsFromDialog(BrowserWindow.fromWebContents(event.sender), only === 'video')
   )
   ipcMain.handle('backgrounds:remove', (_e, id: string) => removeBackground(id))
 
@@ -320,6 +321,12 @@ export function registerIpc(): void {
   ipcMain.handle('voice:spell', (_e, tokens: string[]) =>
     spellVoiceWords(Array.isArray(tokens) ? tokens.map(String).slice(0, 5000) : [])
   )
+
+  ipcMain.on('voice:note', (_e, line: unknown) => journalLine(String(line).slice(0, 8000)))
+  ipcMain.on('voice:sound', (_e, pcm: unknown) => {
+    if (pcm instanceof Uint8Array) journalSound(pcm)
+  })
+  ipcMain.handle('voice:journal', () => openJournal())
 
   ipcMain.handle('voice:heard', (_e, heard: VoiceHeard) => voiceToControl('voice:heard', heard))
   ipcMain.handle('voice:status', (_e, status: unknown) =>

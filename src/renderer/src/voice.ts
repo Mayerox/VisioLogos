@@ -24,6 +24,8 @@ const QUEUE = 300
 
 const GAP_US = 2000
 
+const SOUND_EVERY = RATE * 2
+
 const MODEL_URL = 'visio://voice/model.zip'
 
 const INTERFACE = /usb audio codec|behringer|u-control|uca\s?\d{3}/i
@@ -66,6 +68,9 @@ let generation = 0
 let told = 'off'
 let grammarNow: string | null = null
 let tuning: VoiceTuning = DEFAULT_TUNING
+let recording = false
+let tape = new Int16Array(SOUND_EVERY)
+let taped = 0
 
 function say(status: VoiceStatus): void {
   if (status.state !== told) log(status.state + (status.error ? `: ${status.error}` : ''))
@@ -90,7 +95,7 @@ async function labelled(): Promise<MediaDeviceInfo[]> {
 async function devices(): Promise<void> {
   try {
     const list = (await inputs())
-      .filter((one) => one.deviceId !== 'communications')
+      .filter((one) => !SKIP_IDS.has(one.deviceId))
       .map((one, i) => ({ id: one.deviceId, label: one.label || `Вход ${i + 1}` }))
     window.api.voice.status({ state: told, devices: list })
   } catch (error) {
@@ -108,11 +113,13 @@ async function interfaceInput(): Promise<string | null> {
 async function start(
   deviceId?: string | null,
   grammar?: string | null,
-  wanted?: VoiceTuning
+  wanted?: VoiceTuning,
+  record?: boolean
 ): Promise<void> {
   grammarNow = grammar ?? null
   tuning = cleanTuning(wanted ?? tuning)
   await stop()
+  recording = Boolean(record)
   const my = ++generation
   say({ state: 'loading' })
 
@@ -215,6 +222,7 @@ function take(data: AudioData): void {
   const right = one.right ? one.right.push(one.planeRight) : null
   const shaped = new Float32Array(left.length)
   one.shaper.process(left, right, shaped)
+  if (recording) keepSound(shaped)
 
   let from = 0
   while (from < shaped.length) {
@@ -238,6 +246,18 @@ function take(data: AudioData): void {
       state: told,
       meter: { ...meter, at: timeOf(one), lost: Math.round(one.lost) }
     })
+  }
+}
+
+function keepSound(samples: Float32Array): void {
+  for (let i = 0; i < samples.length; i++) {
+    const v = samples[i]
+    tape[taped++] = v >= 1 ? 32767 : v <= -1 ? -32768 : Math.round(v * 32767)
+    if (taped === tape.length) {
+      window.api.voice.sound(tape)
+      tape = new Int16Array(SOUND_EVERY)
+      taped = 0
+    }
   }
 }
 
@@ -296,6 +316,8 @@ function listenWith(grammar: string | null): Listening {
 
 async function stop(): Promise<void> {
   generation++
+  recording = false
+  taped = 0
   const was = reader
   reader = null
   await was?.cancel().catch(() => undefined)
@@ -317,8 +339,9 @@ function reason(error: unknown): string {
 }
 
 window.api.voice.onCommand((command: VoiceCommand) => {
-  if (command.do === 'start') void start(command.deviceId, command.grammar, command.tuning)
-  else if (command.do === 'stop') void stop().then(() => say({ state: 'off' }))
+  if (command.do === 'start') {
+    void start(command.deviceId, command.grammar, command.tuning, command.record)
+  } else if (command.do === 'stop') void stop().then(() => say({ state: 'off' }))
   else if (command.do === 'devices') void devices()
   else if (command.do === 'tune') {
     tuning = cleanTuning(command.tuning)

@@ -110,6 +110,7 @@ export interface VoiceCommand {
   deviceId?: string | null
   grammar?: string | null
   tuning?: VoiceTuning
+  record?: boolean
 }
 
 const CHANNELS: VoiceChannel[] = ['auto', 'both', 'left', 'right']
@@ -142,7 +143,9 @@ export const ampOf = (db: number): number => 10 ** (db / 20)
 
 const powerOf = (db: number): number => 10 ** (db / 10)
 
-const HIGH_PASS_HZ = 100
+const HIGH_PASS_HZ = 150
+const CEILING = 0.89
+const RELEASE_S = 0.08
 const TARGET_DB = -20
 const AUTO_GAIN = { min: -6, max: 24 }
 const RISE_DB_PER_S = 4
@@ -204,8 +207,10 @@ const smoothing = (rate: number, seconds: number): number => 1 - Math.exp(-1 / (
 export class VoiceShaper {
   private tuning: VoiceTuning
   private readonly rate: number
-  private readonly left: HighPass
-  private readonly right: HighPass
+  private readonly left: HighPass[]
+  private readonly right: HighPass[]
+  private readonly releaseK: number
+  private envelope = 0
   private readonly fastK: number
   private readonly levelK: number
   private readonly openK: number
@@ -236,8 +241,9 @@ export class VoiceShaper {
 
   constructor(rate: number, tuning: VoiceTuning = DEFAULT_TUNING) {
     this.rate = rate
-    this.left = new HighPass(rate, HIGH_PASS_HZ)
-    this.right = new HighPass(rate, HIGH_PASS_HZ)
+    this.left = [new HighPass(rate, HIGH_PASS_HZ), new HighPass(rate, HIGH_PASS_HZ)]
+    this.right = [new HighPass(rate, HIGH_PASS_HZ), new HighPass(rate, HIGH_PASS_HZ)]
+    this.releaseK = Math.exp(-1 / (rate * RELEASE_S))
     this.fastK = smoothing(rate, FAST_S)
     this.levelK = smoothing(rate, LEVEL_S)
     this.openK = smoothing(rate, OPEN_S)
@@ -277,8 +283,8 @@ export class VoiceShaper {
       if (top > this.peak) this.peak = top
       if (top >= CLIP) this.clips++
 
-      const l = this.left.step(rawLeft)
-      const r = stereo ? this.right.step(rawRight) : l
+      const l = this.left[1].step(this.left[0].step(rawLeft))
+      const r = stereo ? this.right[1].step(this.right[0].step(rawRight)) : l
       const mix = (l + r) / 2
       blockLeft += l * l
       blockRight += r * r
@@ -301,7 +307,9 @@ export class VoiceShaper {
 
       this.gate += ((this.open ? 1 : SHUT) - this.gate) * (this.open ? this.openK : this.closeK)
       const y = x * this.gate * this.gain
-      out[i] = y > 1 ? 1 : y < -1 ? -1 : y
+      const size = Math.abs(y)
+      this.envelope = size > this.envelope ? size : this.envelope * this.releaseK
+      out[i] = this.envelope > CEILING ? (y * CEILING) / this.envelope : y
     }
 
     this.sumLeft += blockLeft

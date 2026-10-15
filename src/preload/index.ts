@@ -176,7 +176,7 @@ const api = {
 
   backgrounds: {
     list: (): Promise<BackgroundItem[]> => ipcRenderer.invoke('backgrounds:list'),
-    add: (): Promise<BackgroundItem[]> => ipcRenderer.invoke('backgrounds:add'),
+    add: (only?: 'video'): Promise<BackgroundItem[]> => ipcRenderer.invoke('backgrounds:add', only),
     remove: (id: string): Promise<BackgroundItem[]> =>
       ipcRenderer.invoke('backgrounds:remove', id)
   },
@@ -315,6 +315,11 @@ const api = {
 
     spell: (tokens: string[]): Promise<Record<string, string[]> | null> =>
       ipcRenderer.invoke('voice:spell', tokens),
+
+    note: (line: string): void => ipcRenderer.send('voice:note', line),
+    sound: (pcm: Int16Array): void =>
+      ipcRenderer.send('voice:sound', new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength)),
+    openJournal: (): Promise<void> => ipcRenderer.invoke('voice:journal'),
 
     heard: (heard: VoiceHeard): Promise<void> => ipcRenderer.invoke('voice:heard', heard),
     status: (status: VoiceStatus): Promise<void> =>
