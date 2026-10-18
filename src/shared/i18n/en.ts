@@ -297,6 +297,9 @@ export const en: Dict = {
 
   'home.services': 'Services',
   'home.addService': '+ service',
+  'home.newestFirst': '↓ newest',
+  'home.oldestFirst': '↑ oldest',
+  'home.orderHint': 'Services are sorted by date. Click to reverse the order',
   'home.newServiceHint': 'A new, empty service',
   'home.noService': 'No service selected',
   'home.copy': 'duplicate',

@@ -296,6 +296,9 @@ export const ru = {
 
   'home.services': 'Служения',
   'home.addService': '+ служение',
+  'home.newestFirst': '↓ новые',
+  'home.oldestFirst': '↑ старые',
+  'home.orderHint': 'Служения идут по датам. Нажмите, чтобы перевернуть порядок',
   'home.newServiceHint': 'Новое пустое служение',
   'home.noService': 'Служение не выбрано',
   'home.copy': 'копия',
@@ -550,7 +553,7 @@ export const ru = {
   'texts.countdownHint':
     'Отсчёт стартует в момент показа. Время хранится абсолютным, поэтому зал и сцена показывают одни и те же цифры.',
   'texts.blankHint':
-    'Слайд один: что набрали, то и покажется. Шрифт, цвет и выключка — справа в «Управлении».',
+    'Слайд один: что набрали, то и покажется. Шрифт, цвет и выравнивание — справа в «Управлении».',
   'texts.blankEmpty':
     'Пока пусто — на экране будет только фон. Это же пригодится, чтобы убрать текст, не гася проектор.',
   'texts.addLine': '+ строка',
@@ -603,7 +606,7 @@ export const ru = {
   'control.minSize': 'Не мельче',
   'control.minSizeHint': 'Ниже этого кегля текст режется на несколько слайдов',
   'control.lineHeight': 'Межстрочный',
-  'control.align': 'Выключка',
+  'control.align': 'Выравнивание',
   'control.alignLeft': 'слева',
   'control.alignCenter': 'по центру',
   'control.alignRight': 'справа',

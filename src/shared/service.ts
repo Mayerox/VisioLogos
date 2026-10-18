@@ -36,10 +36,46 @@ export function defaultFolderTitle(date = new Date()): string {
   return `${weekday[0].toUpperCase()}${weekday.slice(1)}, ${day}`
 }
 
-function today(): string {
-  const d = new Date()
+const isoDay = (d: Date): string => {
   const pad = (n: number): string => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function today(): string {
+  return isoDay(new Date())
+}
+
+const monthWords = (() => {
+  const words = new Map<string, number>()
+  for (const locale of ['ru', 'en']) {
+    for (let m = 0; m < 12; m++) {
+      const text = new Date(2000, m, 15).toLocaleDateString(locale, {
+        day: 'numeric',
+        month: 'long'
+      })
+      const word = text.replace(/[\d\s.,]/g, '').toLowerCase()
+      if (word) words.set(word, m)
+    }
+  }
+  return words
+})()
+
+export function serviceDay(folder: Pick<ServiceFolder, 'title' | 'date'>): string {
+  const words = folder.title.toLowerCase().match(/\p{L}+|\d{1,2}/gu) ?? []
+  const base = new Date(`${folder.date}T12:00:00`)
+  if (isNaN(base.getTime())) return folder.date
+  for (let i = 0; i < words.length; i++) {
+    const month = monthWords.get(words[i])
+    if (month === undefined) continue
+    const day = Number(/^\d+$/.test(words[i - 1] ?? '') ? words[i - 1] : words[i + 1])
+    if (!(day >= 1 && day <= 31)) continue
+    const gap = (d: Date): number => Math.abs(d.getTime() - base.getTime())
+    const near = [-1, 0, 1]
+      .map((shift) => new Date(base.getFullYear() + shift, month, day, 12))
+      .sort((a, b) => gap(a) - gap(b))[0]
+    return isoDay(near)
+  }
+  return folder.date
 }
 
 export function emptyFolder(

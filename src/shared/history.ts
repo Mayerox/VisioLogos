@@ -10,6 +10,20 @@ export interface Release {
 
 export const HISTORY: Release[] = [
   {
+    version: '1.0.3',
+    date: '2026-10-18',
+    ru: [
+      'Служения на «Главной» идут по датам, а не по алфавиту: дата берётся из названия («Воскресенье, 4 октября»), а если её там нет — по дню создания. Кнопка «↓ новые / ↑ старые» в заголовке переворачивает порядок, выбор запоминается.',
+      'Заголовок «Служения» с кнопками помещается в одну строку и больше не съезжает.',
+      'В «Управлении» вместо типографского слова «Выключка» теперь понятное «Выравнивание».'
+    ],
+    en: [
+      'Services on the “Home” tab are sorted by date instead of alphabetically: the date is taken from the name (“Sunday, October 4”), or from the day it was created if the name has none. The “↓ newest / ↑ oldest” button in the header reverses the order, and the choice is remembered.',
+      'The “Services” header with its buttons fits on one line and no longer shifts.',
+      'The “Alignment” label in the control panel is clearer now.'
+    ]
+  },
+  {
     version: '1.0.2',
     date: '2026-10-15',
     ru: [

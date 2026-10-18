@@ -1806,6 +1806,22 @@ input[type='range']:hover::-webkit-slider-thumb {
   min-height: 0;
 }
 
+.home__services-head {
+  align-items: center;
+}
+
+.home__services-head > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home__services-head .panel__actions {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .home__path {
   flex: none;
   font-size: 11px;

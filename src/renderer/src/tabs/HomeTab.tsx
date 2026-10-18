@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ServiceItem } from '@shared/types'
-import { dropIndex, itemKindLabel } from '@shared/service'
+import { dropIndex, itemKindLabel, serviceDay } from '@shared/service'
 import { pathOf } from '@shared/tree'
 import { SEPARATOR, useContextMenu, type MenuEntry } from '../components/ContextMenu'
 import { ScreenChips } from '../components/ControlPanel'
@@ -46,6 +46,15 @@ export function HomeTab(): React.JSX.Element {
   const [dropping, setDropping] = useState(false)
 
   const [drag, setDrag] = useState<{ from: number; at: number } | null>(null)
+
+  const [newestFirst, setNewestFirst] = useState(true)
+  useEffect(() => {
+    void window.api.settings.all().then((all) => setNewestFirst(all.servicesOldestFirst !== true))
+  }, [])
+  const flipOrder = (): void => {
+    setNewestFirst(!newestFirst)
+    void window.api.settings.set('servicesOldestFirst', newestFirst)
+  }
 
   const rootRef = useRef<HTMLDivElement>(null)
   const topRef = useRef<HTMLDivElement>(null)
@@ -109,6 +118,12 @@ export function HomeTab(): React.JSX.Element {
     folderId: f.folderId ?? null
   }))
 
+  const days = new Map(s.folders.map((f) => [f.id, `${serviceDay(f)} ${f.createdAt}`]))
+  const byDay = (a: TreeItem, b: TreeItem): number => {
+    const order = (days.get(a.id) ?? '').localeCompare(days.get(b.id) ?? '')
+    return newestFirst ? -order : order
+  }
+
   const planMenu = (item: TreeItem, rename: () => void): MenuEntry[] => [
     { label: t('common.open'), onClick: () => s.select(item.id) },
     {
@@ -144,12 +159,19 @@ export function HomeTab(): React.JSX.Element {
         style={{ gridTemplateColumns: columnsTemplate(layout.topCols ?? []) }}
       >
         <section className="panel">
-          <header className="panel__title panel__title--row">
+          <header className="panel__title panel__title--row home__services-head">
             <span>
               {t('home.services')}
               {s.folders.length > 0 && ` · ${s.folders.length}`}
             </span>
             <span className="panel__actions">
+              <button
+                className="link"
+                title={t('home.orderHint')}
+                onClick={flipOrder}
+              >
+                {newestFirst ? t('home.newestFirst') : t('home.oldestFirst')}
+              </button>
               <button
                 className="link"
                 title={t('tree.newFolderAtRoot')}
@@ -175,6 +197,7 @@ export function HomeTab(): React.JSX.Element {
               items={items}
               activeId={s.activeId}
               rootLabel={t('home.services')}
+              compare={byDay}
               onOpen={(id) => s.select(id)}
               itemMenu={planMenu}
               onRenameItem={
