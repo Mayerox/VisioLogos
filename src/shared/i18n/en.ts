@@ -874,7 +874,7 @@ export const en: Dict = {
   'voice.forwardOff': 'catch up',
   'voice.forwardOn': 'next only',
   'voice.forwardHint':
-    '“Catch up” finds the slide being sung and jumps there. “Next only” turns strictly in order and waits for the words of the next slide; the operator fixes a broken order'
+    '“Catch up” finds the slide being sung and jumps there. “Next only” turns strictly in order and waits for the words of the next slide; the operator fixes a broken order',
   'voice.clip': 'The input is overloaded — turn the desk output down',
   'voice.lost':
     'The input sound was interrupted ({s} s): the computer was overloaded. Close other programs',
