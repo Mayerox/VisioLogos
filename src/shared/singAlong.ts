@@ -249,6 +249,8 @@ export interface TapeMark {
 
   need: number
   times: number
+
+  same: number
 }
 
 export interface Tape {
@@ -285,8 +287,22 @@ export function tapeOf(slides: TapeSlide[], early = false): Tape {
       cue,
       gate,
       need: Math.min(3, pick + 1),
-      times: Math.max(1, Math.floor(slide.times) || 1)
+      times: Math.max(1, Math.floor(slide.times) || 1),
+      same: index
     })
+  })
+
+  const seen = new Map<string, number>()
+  marks.forEach((mark, index) => {
+    const key = words
+      .slice(mark.from, mark.to)
+      .filter(matchable)
+      .map((word) => word.norm)
+      .join(' ')
+    if (!key) return
+    const first = seen.get(key)
+    if (first === undefined) seen.set(key, index)
+    else mark.same = first
   })
 
   return { words, slides: marks }
@@ -544,6 +560,18 @@ function follow(tape: Tape, from: number, heard: string[]): Run | null {
   return tail && first >= 0 ? { first, at, hits } : null
 }
 
+function copyFor(tape: Tape, slide: number, current: number): number {
+  const same = tape.slides[slide].same
+  const away = (index: number): number =>
+    index === current ? -1 : index > current ? index - current : tape.slides.length + current - index
+
+  let best = slide
+  tape.slides.forEach((mark, index) => {
+    if (mark.same === same && away(index) < away(best)) best = index
+  })
+  return best
+}
+
 function relocate(
   tape: Tape,
   state: Follow,
@@ -575,7 +603,15 @@ function relocate(
       const run = follow(tape, start, words)
       if (!run || run.hits < 2) continue
 
-      const found = { ...run, slide: tape.words[run.at - 1].slide }
+      const heardIn = tape.words[run.at - 1].slide
+      const copy = copyFor(tape, heardIn, current)
+      const shift = tape.slides[copy].from - tape.slides[heardIn].from
+      const found = {
+        first: Math.max(0, run.first + shift),
+        at: run.at + shift,
+        hits: run.hits,
+        slide: copy
+      }
       if (!best || better(rank(found), rank(best))) best = found
     }
   }

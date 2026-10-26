@@ -1471,6 +1471,26 @@ function checkSingAlong(): void {
     JSON.stringify({ turns: run.turns, jumps: run.jumps, slide: run.state.slide })
   )
 
+  const chorus = ['Свят свят свят Господь Бог', 'Вся земля полна славы Его']
+  const repeated = tapeFrom([chorus, song[0], song[1], chorus])
+  check(
+    'одинаковые слайды узнаются копиями одного',
+    repeated.slides[0].same === 0 && repeated.slides[3].same === 0 && repeated.slides[1].same === 1,
+    JSON.stringify(repeated.slides.map((one) => one.same))
+  )
+  run = sing(
+    repeated,
+    followFrom(repeated, 1, 0),
+    words('свят свят свят господь бог вся земля полна славы его'),
+    0,
+    400
+  )
+  check(
+    'запели повтор припева — ближайшая копия впереди, а не первая',
+    run.state.slide === 3 && !run.jumps.some((one) => one.to === 0),
+    JSON.stringify({ jumps: run.jumps, turns: run.turns, slide: run.state.slide })
+  )
+
   const deaf = tapeOf([
     {
       times: 1,
