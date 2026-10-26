@@ -32,6 +32,13 @@ export interface VoiceMeter {
   use: ChannelUse
   at?: number
   lost?: number
+  vosk?: VoskCounts
+}
+
+export interface VoskCounts {
+  results: number
+  empty: number
+  partials: number
 }
 
 const TAPS = 95

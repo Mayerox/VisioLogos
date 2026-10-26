@@ -46,7 +46,10 @@ const meterLine = (meter: VoiceMeter): string =>
     `усиление ${meter.gainDb}`,
     meter.open ? 'голос' : 'тишина',
     meter.clip ? 'ПЕРЕГРУЗ' : '',
-    meter.lost ? `потеряно ${meter.lost} мс` : ''
+    meter.lost ? `потеряно ${meter.lost} мс` : '',
+    meter.vosk
+      ? `распознано: итогов ${meter.vosk.results}, пустых ${meter.vosk.empty}, черновиков ${meter.vosk.partials}`
+      : ''
   ]
     .filter(Boolean)
     .join(' · ')

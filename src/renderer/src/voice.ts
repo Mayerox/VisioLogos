@@ -6,7 +6,8 @@ import {
   cleanTuning,
   type VoiceCommand,
   type VoiceStatus,
-  type VoiceTuning
+  type VoiceTuning,
+  type VoskCounts
 } from '@shared/voiceSound'
 
 declare class MediaStreamTrackProcessor<T> {
@@ -71,6 +72,7 @@ let tuning: VoiceTuning = DEFAULT_TUNING
 let recording = false
 let tape = new Int16Array(SOUND_EVERY)
 let taped = 0
+let counts: VoskCounts = { results: 0, empty: 0, partials: 0 }
 
 function say(status: VoiceStatus): void {
   if (status.state !== told) log(status.state + (status.error ? `: ${status.error}` : ''))
@@ -120,6 +122,7 @@ async function start(
   tuning = cleanTuning(wanted ?? tuning)
   await stop()
   recording = Boolean(record)
+  counts = { results: 0, empty: 0, partials: 0 }
   const my = ++generation
   say({ state: 'loading' })
 
@@ -244,7 +247,7 @@ function take(data: AudioData): void {
     const meter = one.shaper.meter()
     window.api.voice.status({
       state: told,
-      meter: { ...meter, at: timeOf(one), lost: Math.round(one.lost) }
+      meter: { ...meter, at: timeOf(one), lost: Math.round(one.lost), vosk: { ...counts } }
     })
   }
 }
@@ -291,7 +294,9 @@ function listenWith(grammar: string | null): Listening {
   recognizer.on('partialresult', (message) => {
     const when = answered()
     const result = 'result' in message ? (message.result as { partial?: string }) : null
-    if (result?.partial) window.api.voice.heard({ text: result.partial, final: false, ...when })
+    if (!result?.partial) return
+    counts.partials++
+    window.api.voice.heard({ text: result.partial, final: false, ...when })
   })
   recognizer.on('result', (message) => {
     const when = answered()
@@ -299,7 +304,11 @@ function listenWith(grammar: string | null): Listening {
       'result' in message
         ? (message.result as { text?: string; result?: { conf: number }[] })
         : null
-    if (!result?.text) return
+    if (!result?.text) {
+      counts.empty++
+      return
+    }
+    counts.results++
     const words = result.result ?? []
     const conf = words.length
       ? words.reduce((sum, word) => sum + word.conf, 0) / words.length
