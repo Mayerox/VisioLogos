@@ -14,6 +14,7 @@ import {
 } from '@shared/singAlong'
 import { useLive } from './live'
 import { useSongs, type SongSlide } from './songs'
+import type { SwitchMoment } from '@shared/voiceSound'
 import { useVoice } from './voice'
 
 interface Built {
@@ -30,7 +31,9 @@ const textKey = (slides: SongSlide[]): string =>
 
 const timesOf = (slides: SongSlide[]): string => slides.map((one) => one.times).join(',')
 
-const early = (): boolean => useVoice.getState().moment === 'early'
+const moment = (): SwitchMoment => useVoice.getState().moment
+
+const forward = (): boolean => useVoice.getState().forward
 
 const at = (ms: number): string => `${(ms / 1000).toFixed(1)} с`
 
@@ -110,7 +113,7 @@ export function startVoiceFollow(): () => void {
     ].filter(Boolean)
 
     return {
-      tape: tapeOf(tapeSlides, early()),
+      tape: tapeOf(tapeSlides, moment(), forward()),
       slides: tapeSlides,
       grammar: phrases.some((one) => one.length > 0) ? phrasesOf(phrases) : null,
       text: textKey(slides),
@@ -141,7 +144,7 @@ export function startVoiceFollow(): () => void {
 
   function retime(slides: TapeSlide[]): void {
     if (!built) return
-    built = { ...built, slides, tape: tapeOf(slides, early()) }
+    built = { ...built, slides, tape: tapeOf(slides, moment(), forward()) }
     publish()
   }
 
@@ -217,7 +220,7 @@ export function startVoiceFollow(): () => void {
   })
 
   const offVoice = useVoice.subscribe((after, before) => {
-    if (after.moment !== before.moment && built) retime(built.slides)
+    if ((after.moment !== before.moment || after.forward !== before.forward) && built) retime(built.slides)
 
     if (after.on === before.on && after.mode === before.mode) return
     utter = null

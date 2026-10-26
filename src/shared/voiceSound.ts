@@ -2,7 +2,7 @@ export type VoiceChannel = 'auto' | 'both' | 'left' | 'right'
 
 export type ChannelUse = 'both' | 'left' | 'right'
 
-export type SwitchMoment = 'last' | 'early'
+export type SwitchMoment = 'last' | 'early' | 'middle'
 
 export interface VoiceTuning {
   channel: VoiceChannel
@@ -132,7 +132,8 @@ export function cleanTuning(value: unknown): VoiceTuning {
   }
 }
 
-export const cleanMoment = (value: unknown): SwitchMoment => (value === 'early' ? 'early' : 'last')
+export const cleanMoment = (value: unknown): SwitchMoment =>
+  value === 'early' || value === 'middle' ? value : 'last'
 
 export const SILENT_DB = -100
 

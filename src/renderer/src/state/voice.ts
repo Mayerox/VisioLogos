@@ -70,6 +70,7 @@ interface VoiceStore {
   mode: VoiceMode
   tuning: VoiceTuning
   moment: SwitchMoment
+  forward: boolean
   record: boolean
 
   sung: Sung | null
@@ -86,6 +87,7 @@ interface VoiceStore {
   setGrammar: (grammar: string | null) => Promise<void>
   setTuning: (patch: Partial<VoiceTuning>) => void
   setMoment: (moment: SwitchMoment) => void
+  setForward: (forward: boolean) => void
   setRecord: (record: boolean) => void
 }
 
@@ -105,6 +107,7 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   mode: 'follow',
   tuning: DEFAULT_TUNING,
   moment: 'last',
+  forward: false,
   record: false,
   sung: null,
   prepare: null,
@@ -121,6 +124,7 @@ export const useVoice = create<VoiceStore>((set, get) => ({
       deviceId: device && !WINDOWS_ALIASES.has(device) ? device : null,
       tuning: cleanTuning(saved.voiceTuning),
       moment: cleanMoment(saved.voiceMoment),
+      forward: saved.voiceForward === true,
       record: saved.voiceRecord === true
     })
 
@@ -226,7 +230,8 @@ export const useVoice = create<VoiceStore>((set, get) => ({
         `режим: ${mode === 'follow' ? 'листание' : 'проверка звука'}`,
         `вход: ${get().deviceId ?? 'авто'}`,
         `настройка: ${JSON.stringify(get().tuning)}`,
-        `смена: ${get().moment}`
+        `смена: ${get().moment}`,
+        `только вперёд: ${get().forward ? 'да' : 'нет'}`
       ].join(' · ')
     )
 
@@ -258,6 +263,11 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   setMoment: (moment) => {
     set({ moment })
     void window.api.settings.set('voiceMoment', moment)
+  },
+
+  setForward: (forward) => {
+    set({ forward })
+    void window.api.settings.set('voiceForward', forward)
   },
 
   setRecord: (record) => {

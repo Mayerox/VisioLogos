@@ -3555,6 +3555,10 @@ button.wide.is-danger {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.segmented--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .segmented--4 {
   grid-template-columns: repeat(4, 1fr);
 }

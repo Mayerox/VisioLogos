@@ -1471,6 +1471,34 @@ function checkSingAlong(): void {
     JSON.stringify({ turns: run.turns, jumps: run.jumps, slide: run.state.slide })
   )
 
+  const plain = song.map((lines) => ({ times: 1, lines: lines.map((line) => tokensOf(line).map(hearable)) }))
+  const middle = tapeOf(plain, 'middle')
+  check(
+    '«с середины строки»: метка на середине последней строки',
+    middle.words[middle.slides[2].cue].norm === 'полна' && middle.slides[2].gate === middle.slides[2].from + 5,
+    `${middle.words[middle.slides[2].cue]?.norm} ${middle.slides[2].gate - middle.slides[2].from}`
+  )
+  run = sing(middle, followFrom(middle, 0, 0), verse, 0, 400)
+  check(
+    '«с середины строки»: переход на середине последней строки',
+    run.turns.length === 1 && run.turns[0].word === 'сердце' && run.turns[0].to === 1,
+    JSON.stringify(run.turns)
+  )
+
+  const strict = tapeOf(plain, 'last', true)
+  run = sing(strict, followFrom(strict, 0, 0), words('свят свят свят господь бог вся земля полна славы'), 0, 400)
+  check(
+    '«только следующий»: через слайд не прыгаем',
+    run.jumps.length === 0 && run.turns.length === 0 && run.state.slide === 0,
+    JSON.stringify({ turns: run.turns, jumps: run.jumps, slide: run.state.slide })
+  )
+  run = sing(strict, run.state, words('буду петь ему новую песнь'), 5000, 400)
+  check(
+    '«только следующий»: следующий слайд включается как обычно',
+    run.turns.some((one) => one.to === 1) && run.state.slide === 1,
+    JSON.stringify({ turns: run.turns, jumps: run.jumps, slide: run.state.slide })
+  )
+
   const deaf = tapeOf([
     {
       times: 1,

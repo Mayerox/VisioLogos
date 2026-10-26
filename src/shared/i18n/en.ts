@@ -867,8 +867,14 @@ export const en: Dict = {
   'voice.moment': 'Turn the slide',
   'voice.momentLast': 'on the last word',
   'voice.momentEarly': 'one word earlier',
+  'voice.momentMiddle': 'mid last line',
   'voice.momentHint':
-    'Normally the next slide comes as soon as the last word starts. “One word earlier” turns on the word before it — handy when the choir sings fast',
+    'Normally the next slide comes as soon as the last word starts. “One word earlier” turns on the word before it — handy when the choir sings fast. “Mid last line” turns halfway through the last line, so the hall can read the start of the next slide in time',
+  'voice.forward': 'When a different slide is sung',
+  'voice.forwardOff': 'catch up',
+  'voice.forwardOn': 'next only',
+  'voice.forwardHint':
+    '“Catch up” finds the slide being sung and jumps there. “Next only” turns strictly in order and waits for the words of the next slide; the operator fixes a broken order'
   'voice.clip': 'The input is overloaded — turn the desk output down',
   'voice.lost':
     'The input sound was interrupted ({s} s): the computer was overloaded. Close other programs',

@@ -254,11 +254,20 @@ export interface TapeMark {
 export interface Tape {
   words: (TapeWord & { slide: number })[]
   slides: TapeMark[]
+
+  forward: boolean
 }
+
+export type TapeMoment = 'last' | 'early' | 'middle'
 
 const matchable = (word: TapeWord): boolean => word.hear && word.norm.length >= MIN_WORD
 
-export function tapeOf(slides: TapeSlide[], early = false): Tape {
+export function tapeOf(
+  slides: TapeSlide[],
+  moment: TapeMoment | boolean = 'last',
+  forward = false
+): Tape {
+  const how: TapeMoment = moment === true ? 'early' : moment === false ? 'last' : moment
   const words: Tape['words'] = []
   const marks: TapeMark[] = []
 
@@ -275,7 +284,14 @@ export function tapeOf(slides: TapeSlide[], early = false): Tape {
     const heard: number[] = []
     for (let i = from; i < to; i++) if (matchable(words[i])) heard.push(i)
 
-    const pick = early && heard.length >= 3 ? heard.length - 2 : heard.length - 1
+    const lastLine = heard.length ? Math.max(...starts.filter((start) => start <= heard[heard.length - 1])) : from
+    const inLast = heard.filter((i) => i >= lastLine).length
+    const pick =
+      how === 'middle' && heard.length > 0
+        ? heard.length - inLast + Math.floor(inLast / 2)
+        : how === 'early' && heard.length >= 3
+          ? heard.length - 2
+          : heard.length - 1
     const cue = pick >= 0 ? heard[pick] : -1
     const gate = cue < 0 ? to : Math.max(from, ...starts.filter((start) => start <= cue))
 
@@ -289,7 +305,7 @@ export function tapeOf(slides: TapeSlide[], early = false): Tape {
     })
   })
 
-  return { words, slides: marks }
+  return { words, slides: marks, forward }
 }
 
 export function slips(a: string, b: string, limit: number): number {
@@ -576,6 +592,7 @@ function relocate(
       if (!run || run.hits < 2) continue
 
       const found = { ...run, slide: tape.words[run.at - 1].slide }
+      if (tape.forward && found.slide !== current && found.slide !== next) continue
       if (!best || better(rank(found), rank(best))) best = found
     }
   }

@@ -24,7 +24,8 @@ const CHANNELS: { value: VoiceChannel; key: Key }[] = [
 
 const MOMENTS: { value: SwitchMoment; key: Key }[] = [
   { value: 'last', key: 'voice.momentLast' },
-  { value: 'early', key: 'voice.momentEarly' }
+  { value: 'early', key: 'voice.momentEarly' },
+  { value: 'middle', key: 'voice.momentMiddle' }
 ]
 
 const FLOOR_DB = -60
@@ -53,6 +54,7 @@ export function VoiceFollow(): React.JSX.Element | null {
   const meter = useVoice((s) => s.meter)
   const tuning = useVoice((s) => s.tuning)
   const moment = useVoice((s) => s.moment)
+  const forward = useVoice((s) => s.forward)
   const sung = useVoice((s) => s.sung)
   const record = useVoice((s) => s.record)
 
@@ -237,7 +239,7 @@ export function VoiceFollow(): React.JSX.Element | null {
 
             <div className="field" title={t('voice.momentHint')}>
               {t('voice.moment')}
-              <div className="segmented segmented--2">
+              <div className="segmented segmented--3">
                 {MOMENTS.map((one) => (
                   <button
                     key={one.value}
@@ -247,6 +249,18 @@ export function VoiceFollow(): React.JSX.Element | null {
                     {t(one.key)}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="field" title={t('voice.forwardHint')}>
+              {t('voice.forward')}
+              <div className="segmented segmented--2">
+                <button className={forward ? '' : 'is-active'} onClick={() => voice.setForward(false)}>
+                  {t('voice.forwardOff')}
+                </button>
+                <button className={forward ? 'is-active' : ''} onClick={() => voice.setForward(true)}>
+                  {t('voice.forwardOn')}
+                </button>
               </div>
             </div>
 
